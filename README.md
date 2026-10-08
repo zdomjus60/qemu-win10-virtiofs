@@ -1,71 +1,75 @@
-# VM Windows 10/11 con QEMU/KVM — istruzioni complete
+# Windows 10/11 VM with QEMU/KVM — complete instructions
 
-Guida per creare, installare e usare la macchina virtuale Windows in questa
-cartella, partendo da un sistema Debian (13 "trixie") appena installato.
+Guide to creating, installing, and using the Windows virtual machine in this
+folder, starting from a freshly installed Debian (13 "trixie") system.
+
+> [Italiano](README.it.md) · **English**
 
 ---
 
-## 0. Cosa c'è in questa cartella
+## 0. What's in this folder
 
-| File / cartella | A cosa serve |
+| File / folder | What it's for |
 |---|---|
-| `launch.sh` | **Il launcher**: avvia la VM (rete, UEFI, TPM, audio, ISO, share) |
-| `qemu-up.sh` | Configura la rete della VM (bridge `br0`, `tap0`, NAT, DHCP) |
-| `qemu-down.sh` | Rimuove la rete creata da `qemu-up.sh` |
-| `win10.qcow2` | Il disco della VM (creato con `--create`) |
-| `Win10_22H2_Italian_x64v1.iso` | ISO di installazione Windows 10 |
-| `Win11_25H2_Italian_x64.iso` | ISO di installazione Windows 11 |
-| `virtio-win-0.1.262.iso` | Driver paravirtualizzati (rete, storage, ...) per Windows |
-| `virtio-win-guest-tools.exe` | Installer dei guest tools (si esegue dentro Windows) |
-| `OVMF/` | Firmware UEFI 4M (CODE + VARS, varianti Secure Boot `.ms` e `.snakeoil`) |
-| `ovmf/` | Vecchio firmware unico + chiavi snakeoil (legacy, non serve) |
-| `swtpm/` | Sorgenti swtpm + `swtpm/state/` (stato del TPM 2.0 della VM) |
-| `OVMF_VARS_win10.fd` | NVRAM della VM (creato al primo avvio, **non cancellare**) |
-| `OVMF_VARS_win10.secboot.fd` | NVRAM usato con `--secureboot` |
-| `condivisa/` | Cartella condivisa con Windows via VirtIO-FS (vedi §6) |
-| `tools/` | Sorgenti del disco di setup: `setup-virtiofs.bat` + driver `viofs/` + installer WinFsp (preparati da solo da `launch.sh`) |
-| `tools.img` | Immagine FAT con partizione MBR costruita da `launch.sh` con `tools/`: montata in Windows come unità di setup |
-| `machine.sh`, `install.sh` | Script legacy (non usati da questa guida) |
+| `launch.sh` | **The launcher**: starts the VM (network, UEFI, TPM, audio, ISO, share) |
+| `qemu-up.sh` | Sets up the VM network (bridge `br0`, `tap0`, NAT, DHCP) |
+| `qemu-down.sh` | Removes the network created by `qemu-up.sh` |
+| `win10.qcow2` | The VM disk — **not in the repo** (23 GB): create it with `--create` (§2) |
+| `en-us_windows_10_iot_enterprise_ltsc_2021_x64_dvd_257ad90f.iso` | Windows 10 ISO used by this guide — **not in the repo** (Microsoft license): download it, §1.5; for a different ISO `./launch.sh --iso-file FILE` (§4.2) |
+| `virtio-win-0.1.262.iso` | Paravirtualized drivers (network, storage) — **not in the repo**: download it, §1.5 (optional, §4.3) |
+| `virtio-win-guest-tools.exe` | Installer for the Windows guest tools: run it inside Windows for the network drivers (§4.1) |
+| `OVMF/` | 4M UEFI firmware (CODE + VARS, Secure Boot variants `.ms` and `.snakeoil`) — in the repo (same files as the Debian `ovmf` package) |
+| `ovmf/` | Old monolithic firmware + snakeoil keys (legacy, not needed; **not in the repo**) |
+| `swtpm/` | swtpm sources, BSD-3 license (in the repo); `swtpm/state/` (TPM state) is generated at startup, **not in the repo** |
+| `OVMF_VARS_win10.fd` | VM NVRAM: generated on first boot, **not in the repo**, **do not delete** |
+| `OVMF_VARS_win10.secboot.fd` | NVRAM used with `--secureboot` (as above) |
+| `condivisa/` | Folder shared with Windows via VirtIO-FS (see §6); the files inside are yours → **not in the repo** |
+| `tools/` | Setup disk: `setup-virtiofs.bat` + `viofs/` drivers + WinFsp installer — **all in the repo** (`launch.sh` adds whatever is missing) |
+| `tools.img` | FAT image with an MBR partition built by `launch.sh` from `tools/`: mounted in Windows as a setup drive (generated at startup, **not in the repo**) |
+| `machine.sh`, `install.sh` | Legacy scripts (not used by this guide) |
+| `LICENSE` | MIT license of the project |
+| `THIRD_PARTY.md` | Licenses of the redistributed third-party components (firmware, drivers, swtpm) |
 
-> **Nota per chi clona il repository**: i file binari/dati (ISO Windows,
-> disco `win10.qcow2`, firmware `OVMF/` e `ovmf/`, NVRAM `OVMF_VARS_*.fd`,
-> `seriale.txt`, stato TPM, contenuti di `condivisa/`) **non sono nel repo**
-> (vedi `.gitignore`: contengono dati personali, licenze o seriali). In un
-> clone pulito ti servono almeno: un'ISO Windows, la `virtio-win-*.iso`
-> (link in §1.2), il firmware dal pacchetto Debian `ovmf` e
-> `./launch.sh --create` per il disco virtuale.
+> **Note for those cloning the repository**: the repo has everything you need —
+> scripts, `OVMF/` firmware, VirtIO-FS drivers and the WinFsp installer in `tools/`,
+> `swtpm/` sources. Only these stay **outside**: the ISOs (downloadable, §1.5), the
+> `win10.qcow2` disk (`./launch.sh --create`, §2), the serial key
+> (`seriale.txt`), the contents of `condivisa/` (personal data), the legacy
+> `ovmf/` (§9) and the files **generated at startup** (NVRAM `OVMF_VARS_win10*.fd`,
+> `tools.img`, TPM state `swtpm/state/`): you don't need to create them, they appear on
+> their own.
 
 ---
 
-## 1. Installazione delle dipendenze (da zero)
+## 1. Installing the dependencies (from scratch)
 
-### 1.1 Requisiti
+### 1.1 Requirements
 
-- CPU con **VT-x** (Intel) o AMD-V attivato nel BIOS/UEFI del fisico.
-  Per verificare da un live Linux: `grep -E 'vmx|svm' /proc/cpuinfo`
-  (devono comparire i flag `vmx`/`svm`, insieme a `ept`), poi
-  `ls /dev/kvm` deve esistire. Ce l'hanno anche molti Celeron dal 2011
-  in poi (es. Ivy Bridge): nel BIOS cerca "Intel Virtualization
-  Technology" e assicurati che sia attivo.
-- ~40 GB liberi per il disco della VM (100 GB consigliati, il disco è dinamico).
-- Un desktop con audio (PipeWire) per finestra e suono.
+- CPU with **VT-x** (Intel) or AMD-V enabled in the physical machine's BIOS/UEFI.
+  To check from a live Linux session: `grep -E 'vmx|svm' /proc/cpuinfo`
+  (the `vmx`/`svm` flags must appear, along with `ept`), then
+  `ls /dev/kvm` must exist. Many Celerons from 2011
+  onwards have them too (e.g. Ivy Bridge): in the BIOS look for "Intel Virtualization
+  Technology" and make sure it is enabled.
+- ~40 GB free for the VM disk (100 GB recommended, the disk is dynamic).
+- A desktop with audio (PipeWire) for window and sound.
 
-### 1.2 Utente e KVM
+### 1.2 User and KVM
 
 ```bash
-ls -l /dev/kvm                     # deve esistere: crw-rw---- root kvm
-groups | tr ' ' '\n' | grep kvm     # deve comparire "kvm"
-sudo usermod -aG kvm "$USER"       # se non c'è: aggiungiti al gruppo
-# poi ESCI dal sessione e rientra (o riavvia)
+ls -l /dev/kvm                     # must exist: crw-rw---- root kvm
+groups | tr ' ' '\n' | grep kvm     # must show "kvm"
+sudo usermod -aG kvm "$USER"       # if not there: add yourself to the group
+# then LOG OUT of the session and back in (or reboot)
 ```
 
-Se manca il modulo (raro):
+If the module is missing (rare):
 
 ```bash
 sudo apt install --reinstall linux-image-$(uname -r)
 ```
 
-### 1.3 Pacchetti necessari
+### 1.3 Required packages
 
 ```bash
 sudo apt update
@@ -79,109 +83,124 @@ sudo apt install -y \
     dosfstools mtools
 ```
 
-`virtiofsd` è il demone che espone la cartella condivisa alla VM via
-**VirtIO-FS** (sostituisce Samba: nessun servizio da avviare, nessuna porta di
-rete, nessuna password).
+`virtiofsd` is the daemon that exposes the shared folder to the VM via
+**VirtIO-FS** (replaces Samba: no service to start, no network
+ports, no passwords).
 
-`dosfstools` + `mtools` servono a `launch.sh` per costruire `tools.img`
-(l'immagine FAT col disco di setup, vedi §6.1). Senza, si ricade sul modulo
-`vvfat` di QEMU, che va a volte in assertion e uccide la VM.
+`dosfstools` + `mtools` are needed by `launch.sh` to build `tools.img`
+(the FAT image with the setup disk, see §6.1). Without them you fall back to QEMU's
+`vvfat` module, which sometimes hits an assertion and kills the VM.
 
-Pacchetti **opzionali** ma utili:
+**Optional** but useful packages:
 
 ```bash
-sudo apt install -y curl 7zip      # preparano da soli driver e WinFsp in tools/
-sudo apt install -y socat        # per parlare con il monitor di QEMU
-sudo apt install -y cpu-checker  # fornisce il comando "kvm-ok"
-sudo apt install -y libguestfs-tools  # per ispezionare il disco senza avviare la VM
+sudo apt install -y curl 7zip      # if tools/ is incomplete: extracts drivers from the ISO and downloads WinFsp
+sudo apt install -y socat        # to talk to the QEMU monitor
+sudo apt install -y cpu-checker  # provides the "kvm-ok" command
+sudo apt install -y libguestfs-tools  # to inspect the disk without booting the VM
 ```
 
-L'audio usa PipeWire, presente di default su Debian 13; se manca:
+Audio uses PipeWire, present by default on Debian 13; if missing:
 
 ```bash
 sudo apt install -y pipewire-audio pipewire-pulse wireplumber
 ```
 
-### 1.4 Verifica rapida
+### 1.4 Quick check
 
 ```bash
-qemu-system-x86_64 --version      # es. 10.0.x
-kvm-ok                            # se hai installato cpu-checker
-./launch.sh --dry-run             # stampa il comando qemu che verrebbe eseguito
+qemu-system-x86_64 --version      # e.g. 10.0.x
+kvm-ok                            # if you installed cpu-checker
+./launch.sh --dry-run             # prints the qemu command that would be run
 ```
 
-Le ISO Windows e `virtio-win-0.1.262.iso` sono già nella cartella (ma non
-fanno parte del repository: vedi §0). Se vuoi
-scaricare l'ultima versione dei driver VirtIO:
+### 1.5 The ISOs (to download: not part of the repository)
 
-```text
-https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/stable-virtio/virtio-win.iso
-```
+- **Windows ISO** (only needed for installation): download the official ISO
+  image from Microsoft:
+
+  ```text
+  https://www.microsoft.com/software-download/windows10
+  ```
+
+  (for Windows 11: `https://www.microsoft.com/software-download/windows11`).
+  Put it in this folder and run `./launch.sh --iso-file NAME.iso`
+  (the `--iso` option with no arguments uses the name of the ISO present in
+  the original folder of this guide:
+  `en-us_windows_10_iot_enterprise_ltsc_2021_x64_dvd_257ad90f.iso`).
+- **virtio-win driver ISO** (optional): only needed to attach it with
+  `./launch.sh --drivers` and install the network drivers from the CD (§4.1, §4.3).
+  For VirtIO-FS and WinFsp it is **not needed**: the drivers and installer are already in
+  the repository under `tools/`. Latest version:
+
+  ```text
+  https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/stable-virtio/virtio-win.iso
+  ```
 
 ---
 
-## 2. Creazione della macchina virtuale
+## 2. Creating the virtual machine
 
 ```bash
-./launch.sh --create          # crea win10.qcow2 da 100 GB (spazio usato reale: ~0)
-./launch.sh --create 150G     # oppure una dimensione diversa
+./launch.sh --create          # create a 100 GB win10.qcow2 (actual space used: ~0)
+./launch.sh --create 150G     # or a different size
 ```
 
-- Il disco è **qcow2 dinamico**: dichiara 100 GB ma occupa lo spazio realmente
-  usato (ora ~35 GB per la tua installazione esistente).
-- Per un secondo disco/macchina: `./launch.sh --create --disk win11.qcow2`.
-- Per ingrandire un disco esistente: `qemu-img resize win10.qcow2 150G`
-  (dentro Windows poi va esteso lo spazio non allocato).
+- The disk is a **dynamic qcow2**: it declares 100 GB but only occupies the space
+  actually used (now ~35 GB for your existing installation).
+- For a second disk/machine: `./launch.sh --create --disk win11.qcow2`.
+- To grow an existing disk: `qemu-img resize win10.qcow2 150G`
+  (inside Windows you then have to extend the unallocated space).
 
-Non serve altro: la VM usa q35 + UEFI, mentre **RAM e vCPU vengono rilevate
-automaticamente** all'avvio in base all'host (metà dei thread e circa metà
-della RAM, con vincoli 1-8 vCPU e 2G-16G): con `--smp`/`--mem` le puoi
-forzare (vedi §5, "Tutte le opzioni").
+Nothing else is needed: the VM uses q35 + UEFI, while **RAM and vCPUs are detected
+automatically** at startup based on the host (half the threads and about half
+the RAM, limited to 1-8 vCPUs and 2G-16G): with `--smp`/`--mem` you can
+force them (see §5, "All the options").
 
 ---
 
-## 3. Rete della VM (bridge + NAT + DHCP)
+## 3. VM network (bridge + NAT + DHCP)
 
-**In pratica non devi pensarci**: se la rete manca, `./launch.sh` lancia da
-solo `./qemu-up.sh` (ti chiede solo la password sudo al terminale) e prosegue
-con l'avvio. Per disabilitare questo comportamento: `./launch.sh --no-auto-net`.
+**In practice you don't need to think about it**: if the network is missing, `./launch.sh` runs
+`./qemu-up.sh` by itself (it only asks for your sudo password in the terminal) and continues
+booting. To disable this behavior: `./launch.sh --no-auto-net`.
 
-La rete resta comunque configurata **una volta dopo ogni riavvio** del fisico:
+The network still has to be configured **once after each reboot** of the physical machine:
 
 ```bash
 ./qemu-up.sh
 ```
 
-Lo script fa, chiedendo la password sudo:
+The script does the following, asking for the sudo password:
 
-1. rileva da solo l'interfaccia di uplink dalla route default
-   (es. `wlp3s0` su Wi-Fi, `enp0…` su cavo) — basta che tu abbia internet;
-2. abilita `net.ipv4.ip_forward=1`;
-3. crea il bridge `br0` con indirizzo `192.168.100.1/24` e l'interfaccia
-   `tap0` (proprietaria: il tuo utente, così QEMU parte **senza sudo**);
-4. aggiunge le regole iptables di NAT verso l'esterno;
-5. avvia un `dnsmasq` dedicato che fa **solo DHCP** per la VM
+1. it detects the uplink interface from the default route
+   (e.g. `wlp3s0` on Wi-Fi, `enp0…` on cable) — you just need internet;
+2. enables `net.ipv4.ip_forward=1`;
+3. creates the `br0` bridge with address `192.168.100.1/24` and the `tap0`
+   interface (owned by your user, so QEMU starts **without sudo**);
+4. adds the iptables NAT rules for outbound traffic;
+5. starts a dedicated `dnsmasq` that does **DHCP only** for the VM
    (range `192.168.100.10–200`, gateway `192.168.100.1`, DNS `8.8.8.8`).
 
-Per rimuovere tutto:
+To remove everything:
 
 ```bash
 ./qemu-down.sh
 ```
 
-**Alternativa senza root/bridge** (utile in viaggio o se non vuoi toccare la
-rete dell'host):
+**Alternative without root/bridge** (useful when traveling or if you don't want to touch the
+host network):
 
 ```bash
 ./launch.sh --net user
 ```
 
-Rete "slirp": la VM ha internet, l'host è raggiungibile all'indirizzo
-`10.0.2.2`. La VM **non** è raggiungibile dall'esterno.
+"slirp" network: the VM has internet, the host is reachable at address
+`10.0.2.2`. The VM is **not** reachable from outside.
 
 ---
 
-## 4. Installazione di Windows 10 o 11
+## 4. Installing Windows 10 or 11
 
 ### 4.1 Windows 10
 
@@ -190,269 +209,274 @@ Rete "slirp": la VM ha internet, l'host è raggiungibile all'indirizzo
 ./launch.sh --iso
 ```
 
-Si avvia dal CD di installazione. Durante l'installazione:
+It boots from the installation CD. During installation:
 
-1. seleziona la partizione e lascia che Windows crei GPT/UEFI (se trovi una
-   vecchia partizione, `Cancella` + `Avanti`);
-2. l'installazione va avanti da sola (il disco è su AHCI, driver già inclusi
-   in Windows).
+1. select the partition and let Windows create GPT/UEFI (if you find an
+   old partition, `Delete` + `Next`);
+2. the installation proceeds by itself (the disk is on AHCI, drivers already included
+   in Windows);
+3. if Windows asks for the product key: choose *"I don't have a product
+   key"* (it activates later) or enter yours, writing it down in
+   `seriale.txt` (a file excluded from the repository, see §0).
 
-Dopo il primo avvio:
+After the first boot:
 
-1. dentro Windows apri il drive del CD **virtio-win** ed esegui
-   `virtio-win-guest-tools.exe` (installa driver di rete, ballooning,
-   memoria, ecc.);
-2. disattiva il **Fast Startup**:
-   *Pannello di controllo → Opzioni risparmio energetico → Scelta azione
-   alimentazione → Modifica impostazioni attuali → Seleziona quello che deve
-   eseguire l'interruttore di spegnimento* → rimuovi la spunta su
-   "Attiva avvio rapido";
-3. installa le aggiornamenti di Windows.
+1. inside Windows open the **virtio-win** CD drive and run
+   `virtio-win-guest-tools.exe` (installs network drivers, ballooning,
+   memory, etc.). *Alternative without downloading the ISO: copy
+   `virtio-win-guest-tools.exe` (it's in the repository) into the
+   `condivisa/` folder on the host and, after running `setup-virtiofs.bat`
+   (§6.1), launch it inside Windows from the shared drive (Z:);*
+2. disable **Fast Startup**:
+   *Control Panel → Power Options → Choose what the power buttons
+   do → Change settings that are currently available → Define what the
+   power buttons do* → uncheck "Turn on fast startup";
+3. install Windows updates.
 
-> Dopo l'installazione si riprende normalmente con `./launch.sh` (senza
-> `--iso`, che serve solo per l'installazione). Se ti servono comunque i
-> driver come unità: `./launch.sh --drivers` aggancia **solo** la ISO virtio-win
-> facendo boot dal disco (per la condivisione VirtIO-FS non serve: i driver
-> vengono estratti automaticamente in `tools/`).
+> After installation you simply continue with `./launch.sh` (without
+> `--iso`, which is only needed for installation). If you still need the
+> drivers as a drive: `./launch.sh --drivers` attaches **only** the virtio-win
+> ISO, booting from disk (for the VirtIO-FS share it's not needed: the drivers
+> are already in `tools/`, inside the repository).
 
 ### 4.2 Windows 11
 
-Windows 11 richiede **TPM 2.0** (e firmware UEFI con Secure Boot
-"capacitativo"): per quello esistono i flag `--tpm` e `--secureboot`.
+Windows 11 requires **TPM 2.0** (and UEFI firmware with "capable"
+Secure Boot): that's what the `--tpm` and `--secureboot` flags are for.
 
 ```bash
 ./qemu-up.sh
 ./launch.sh --iso-file Win11_25H2_Italian_x64.iso --tpm --secureboot
 ```
 
-- `--tpm` avvia **swtpm** (TPM 2.0 virtuale) con stato persistente in
-  `swtpm/state/`: dopo la prima configurazione Windows lo vede sempre presente.
-  **È necessario per l'installazione**: senza TPM il setup si ferma su
-  "Questo PC non supporta Windows 11".
-- `--secureboot` usa `OVMF/OVMF_CODE_4M.secboot.fd` con il template
-  `OVMF_VARS_4M.ms.fd` che contiene già le chiavi Microsoft
+- `--tpm` starts **swtpm** (virtual TPM 2.0) with persistent state in
+  `swtpm/state/`: after the first setup Windows always sees it present.
+  **It is required for installation**: without TPM setup stops at
+  "This PC doesn't support Windows 11".
+- `--secureboot` uses `OVMF/OVMF_CODE_4M.secboot.fd` with the template
+  `OVMF_VARS_4M.ms.fd` which already contains the Microsoft keys
   (`Microsoft Windows Production PCA 2011`, `Microsoft Corporation UEFI CA 2011`)
-  → Windows parte con Secure Boot **attivo**.
-  *Nota:* esiste anche un template `.snakeoil` (chiavi di prova): **non
-  usarlo**, blocherebbe Windows Boot Manager.
-- In seguito avvii con `./launch.sh --tpm` (senza `--iso-file`).
-- Se per qualche motivo Windows non parte con `--secureboot`, toglilo:
-  Win11 si installa comunque con UEFI "capacitativo" + TPM.
+  → Windows boots with Secure Boot **enabled**.
+  *Note:* there is also a `.snakeoil` template (test keys): **do not
+  use it**, it would block Windows Boot Manager.
+- Afterwards, boot with `./launch.sh --tpm` (without `--iso-file`).
+- If for some reason Windows doesn't boot with `--secureboot`, drop it:
+  Win11 installs anyway with "capable" UEFI + TPM.
 
-L'avvio del TPM e la pulizia avvengono in automatico: quando chiudi la VM,
-`launch.sh` termina anche swtpm.
+TPM startup and cleanup are automatic: when you close the VM,
+`launch.sh` also terminates swtpm.
 
-### 4.3 Driver virtio durante l'installazione (facoltativo)
+### 4.3 Virtio drivers during installation (optional)
 
-Di default il disco è su controller AHCI e la rete usa `virtio-net`:
+By default the disk is on an AHCI controller and the network uses `virtio-net`:
 
-- il disco funziona subito (Windows ha il driver `storahci`);
-- la **rete** funziona solo dopo aver installato i driver (passaggio
-  `virtio-win-guest-tools.exe` del §4.1), oppure caricandoli a mano durante
-  l'installazione con *"Carica driver → sfoglia → DVD virtio-win → vioscsi/netkvm"*.
+- the disk works right away (Windows has the `storahci` driver);
+- the **network** works only after installing the drivers (the
+  `virtio-win-guest-tools.exe` step of §4.1), or by loading them manually during
+  installation with *"Load driver → browse → virtio-win DVD → vioscsi/netkvm"*.
 
 ---
 
-## 5. Il launcher: `launch.sh`
+## 5. The launcher: `launch.sh`
 
-Uso quotidiano:
-
-```bash
-./qemu-up.sh     # una volta dopo il riavvio del fisico (rete)
-./launch.sh      # avvia la VM
-```
-
-**Fermare la VM:** chiudi la finestra della VM, oppure:
+Daily use:
 
 ```bash
-socat - UNIX-CONNECT:"$PWD/win10-monitor.sock"     # poi scrivi "quit"
+./qemu-up.sh     # once after rebooting the physical machine (network)
+./launch.sh      # start the VM
 ```
 
-Non usare `sudo ./launch.sh`: il launcher parte e gira come utente normale
-(ed è **obbligatorio** per l'audio, vedi FAQ). L'utente deve solo far parte
-del gruppo `kvm` (§1.2): l'interfaccia `tap0` viene creata da `qemu-up.sh`
-proprietaria del tuo utente, quindi non serve sudo per avviare la VM.
+**Stopping the VM:** close the VM window, or:
 
-### Tutte le opzioni
+```bash
+socat - UNIX-CONNECT:"$PWD/win10-monitor.sock"     # then type "quit"
+```
 
-| Opzione | Effetto |
+Don't run `sudo ./launch.sh`: the launcher starts and runs as a normal user
+(and this is **mandatory** for audio, see the FAQ). The user only needs to be a
+member of the `kvm` group (§1.2): the `tap0` interface is created by `qemu-up.sh`
+owned by your user, so no sudo is needed to start the VM.
+
+### All the options
+
+| Option | Effect |
 |---|---|
-| `--create [DIM]` | crea il disco qcow2 (default 100G) ed esce |
-| `--iso` | aggancia ISO Windows + virtio-win e avvia dal CD (installazione) |
-| `--iso-file FILE` | come `--iso` ma con un'altra ISO Windows (Win11) |
-| `--drivers` | aggancia solo la ISO virtio-win, boot dal disco (opzionale: il setup della condivisione non ne ha bisogno) |
-| `--tpm` | avvia swtpm (TPM 2.0) — serve per Windows 11 |
-| `--secureboot` | firmware OVMF con Secure Boot e chiavi Microsoft |
-| `--net tap\|user` | rete bridge/NAT (default) oppure slirp senza root |
-| `--no-auto-net` | non lancia automaticamente `qemu-up.sh` se la rete tap manca |
-| `--disk FILE` | usa un altro disco qcow2 |
-| `--smp N` | vCPU della VM (default: auto — metà dei thread dell'host, 1-8) |
-| `--mem SIZE` | RAM della VM in MB o con suffisso G, es. `4096` oppure `6G` (default: auto — circa metà della RAM dell'host, 2G-16G) |
-| `--share` | info sulla condivisione VirtIO-FS e sul driver Windows |
-| `--share-dir DIR` | cartella host da condividere (default `./condivisa`) |
-| `--no-share` | avvia la VM senza la condivisione VirtIO-FS |
-| `--check` | controlla solo KVM/display/disco/rete e termina (niente VM) |
-| `--dry-run` | stampa il comando qemu senza eseguirlo (utile per debug) |
-| `-h`, `--help` | aiuto |
+| `--create [SIZE]` | creates the qcow2 disk (default 100G) and exits |
+| `--iso` | attaches the Windows + virtio-win ISOs and boots from CD (installation) |
+| `--iso-file FILE` | like `--iso` but with a different Windows ISO (Win11) |
+| `--drivers` | attaches only the virtio-win ISO, boots from disk (optional: the share setup doesn't need it) |
+| `--tpm` | starts swtpm (TPM 2.0) — needed for Windows 11 |
+| `--secureboot` | OVMF firmware with Secure Boot and Microsoft keys |
+| `--net tap\|user` | bridge/NAT network (default) or rootless slirp |
+| `--no-auto-net` | doesn't automatically run `qemu-up.sh` if the tap network is missing |
+| `--disk FILE` | uses a different qcow2 disk |
+| `--smp N` | VM vCPUs (default: auto — half the host's threads, 1-8) |
+| `--mem SIZE` | VM RAM in MB or with a G suffix, e.g. `4096` or `6G` (default: auto — about half the host's RAM, 2G-16G) |
+| `--share` | info on the VirtIO-FS share and the Windows driver |
+| `--share-dir DIR` | host folder to share (default `./condivisa`) |
+| `--no-share` | starts the VM without the VirtIO-FS share |
+| `--check` | only checks KVM/display/disk/network and exits (no VM) |
+| `--dry-run` | prints the qemu command without running it (useful for debugging) |
+| `-h`, `--help` | help |
 
-### Cosa fa al posto tuo
+### What it does for you
 
-- **KVM**: `accel=kvm` + `-cpu host` e gli enlightenments Hyper-V
-  (`hv_relaxed`, `hv_vapic`, `hv_spinlocks`, `hv_time`, ...) → Windows è
-  fluido invece di arenarsi; senza questi flag la VM va 3-5× più lento.
-- **UEFI**: pflash con `OVMF_CODE_4M.fd` + `OVMF_VARS_win10.fd` → le voci di
-  boot e il TPM restano salvati tra un riavvio e l'altro.
-- **Rete**: controlla che `br0`/`tap0`/DHCP siano pronti e ti dice esattamente
-  cosa lanciare se non lo sono; con `--net user` non serve nulla.
-- **Audio**: `-audiodev pipewire` collegato alla sessione utente.
-- **Disco**: `format=qcow2` esplicito e `discard=unmap` (TRIM di Windows).
-- **Protezioni**: se la VM è già in giro, ti avvisa invece di morire con
-  *"Failed to get write lock"*; se manca `/dev/kvm` o il display, errore chiaro.
-- **USB**: un solo controller `qemu-xhci` con tastiera/mouse/tablet.
+- **KVM**: `accel=kvm` + `-cpu host` and the Hyper-V enlightenments
+  (`hv_relaxed`, `hv_vapic`, `hv_spinlocks`, `hv_time`, ...) → Windows is
+  smooth instead of stalling; without these flags the VM runs 3-5× slower.
+- **UEFI**: pflash with `OVMF_CODE_4M.fd` + `OVMF_VARS_win10.fd` → boot entries
+  and the TPM stay saved across reboots.
+- **Network**: checks that `br0`/`tap0`/DHCP are ready and tells you exactly
+  what to run if they aren't; with `--net user` nothing is needed.
+- **Audio**: `-audiodev pipewire` connected to the user session.
+- **Disk**: explicit `format=qcow2` and `discard=unmap` (Windows TRIM).
+- **Protections**: if the VM is already running, it warns you instead of dying with
+  *"Failed to get write lock"*; if `/dev/kvm` or the display is missing, a clear error.
+- **USB**: a single `qemu-xhci` controller with keyboard/mouse/tablet.
 
 ---
 
-## 6. Cartella condivisa host ↔ VM (VirtIO-FS)
+## 6. Shared folder host ↔ VM (VirtIO-FS)
 
-La condivisione avviene via **VirtIO-FS** (`virtiofsd`), non più con Samba:
-il demone parte e si spegne insieme alla VM, senza rete, porta 445, utenti né
-password. Il launcher la abilita **di default**.
+Sharing happens via **VirtIO-FS** (`virtiofsd`), no longer with Samba:
+the daemon starts and stops together with the VM, with no network, port 445, users, or
+passwords. The launcher enables it **by default**.
 
-- cartella host: `./condivisa` (si crea da sola se manca)
-- tag guest: `condivisa`
-- socket: `./virtiofsd.sock` (vhost-user, creato e rimosso ad ogni avvio)
+- host folder: `./condivisa` (created automatically if missing)
+- guest tag: `condivisa`
+- socket: `./virtiofsd.sock` (vhost-user, created and removed at every start)
 
-Cambiarla:
+To change it:
 
 ```bash
 ./launch.sh --share-dir "$HOME/Documenti"
-./launch.sh --no-share                    # VM senza condivisione
-./launch.sh --share                       # verifica + istruzioni
+./launch.sh --no-share                    # VM without sharing
+./launch.sh --share                       # checks + instructions
 ```
 
-### 6.1 Installazione dentro Windows (una tantum, automatizzata)
+### 6.1 Installation inside Windows (one-time, automated)
 
-All'avvio il launcher prepara dentro `tools/` tutto ciò che serve (una tantum)
-e ne fa l'immagine FAT `tools.img`, montata in Windows come unità (di solito
+At startup the launcher prepares everything needed inside `tools/` (one time)
+and builds the FAT image `tools.img` from it, mounted in Windows as a drive (usually
 `E:`):
 
-- `viofs/w10` e `viofs/w11`: i driver VirtIO FS estratti dalla ISO virtio-win
-  (servono `7z` e la ISO `virtio-win-*.iso` nella cartella della VM);
-- `winfsp-*.msi` (o `.setup.exe`): l'installer di WinFsp scaricato da GitHub
-  (serve `curl`); se il download non riesce, dentro Windows si può comunque
-  installarlo a mano passando per la rete.
+- `viofs/w10` and `viofs/w11`: the VirtIO FS drivers extracted from the virtio-win
+  ISO (requires `7z` and the `virtio-win-*.iso` ISO in the VM folder);
+- `winfsp-*.msi` (or `.setup.exe`): the WinFsp installer downloaded from GitHub
+  (requires `curl`); if the download fails, you can still
+  install it manually inside Windows over the network.
 
-> L'immagine è un disco FAT vero e proprio (`mkfs.fat` + `mtools`, da cui
-> dipendono `dosfstools`/`mtools`): niente `vvfat` di QEMU, che in versioni
-> recenti va a volte in assertion `index < array->next` e fa morire la VM.
-> Contiene un **MBR con una partizione FAT32** (tipo `0x0C`, da 1 MiB a fine
-> disco): Windows non monta un disco FAT senza tabella partizioni («super-
-> floppy»), quindi la partizione è obbligatoria — un'immagine vecchia senza
-> partizione viene rilevata e rigenerata da sola.
-> `tools.img` viene rigenerata quando manca la partizione attesa o quando
-> qualcosa in `tools/` cambia.
+> The image is a real FAT disk (`mkfs.fat` + `mtools`, which
+> `dosfstools`/`mtools` depend on): no QEMU `vvfat`, which in recent
+> versions sometimes asserts `index < array->next` and kills the VM.
+> It contains an **MBR with a FAT32 partition** (type `0x0C`, from 1 MiB to the end
+> of the disk): Windows doesn't mount a FAT disk without a partition table ("super-
+> floppy"), so the partition is mandatory — an old partitionless image is detected
+> and regenerated automatically.
+> `tools.img` is regenerated when the expected partition is missing or when
+> something in `tools/` changes.
 
-Dentro Windows quindi **non servono né ISO montate né connessione**.
+So inside Windows **you need neither mounted ISOs nor a network connection**.
 
-1. **Dentro Windows**: apri l'unità che contiene `setup-virtiofs.bat` (un disco
-   virtuale, es. `E:` — è quello col file `.bat`) ed eseguilo con
-   *destro → Esegui come amministratore*. Fa da solo:
-   - installa **WinFsp** dall'installer presente nell'unità (in fallback:
-     lo scarica da GitHub se la VM ha rete);
-   - installa il driver VirtIO FS da `viofs\w10\amd64` (o `w11`) sempre
-     sull'unità, con `pnputil /install` — in fallback cerca la ISO virtio-win
-     montata come unità, quindi `./launch.sh --drivers` resta valido);
-   - copia il client `virtiofs.exe` in `C:\Windows\VirtioFS`;
-   - crea/aggiorna e avvia il servizio **VirtioFsSvc**.
+1. **Inside Windows**: open the drive containing `setup-virtiofs.bat` (a virtual
+   disk, e.g. `E:` — it's the one with the `.bat` file) and run it via
+   *right-click → Run as administrator*. It does everything itself:
+   - installs **WinFsp** from the installer on the drive (fallback:
+     downloads it from GitHub if the VM has network);
+   - installs the VirtIO FS driver from `viofs\w10\amd64` (or `w11`), also
+     on the drive, with `pnputil /install` — as a fallback it looks for the virtio-win
+     ISO mounted as a drive, so `./launch.sh --drivers` remains valid);
+   - copies the `virtiofs.exe` client to `C:\Windows\VirtioFS`;
+   - creates/updates and starts the **VirtioFsSvc** service.
 
-2. **Risultato**: in *Esplora file* la condivisione `condivisa` appare come
-   unità (di default `Z:`). Lettera diversa, senza editare il registro a mano:
+2. **Result**: in *File Explorer* the `condivisa` share appears as a
+   drive (by default `Z:`). Different letter, without editing the registry by hand:
 
    ```bat
    setup-virtiofs.bat X:
    ```
 
-   (scrive `HKLM\SOFTWARE\VirtIO-FS\MountPoint` e riavvia il servizio).
+   (writes `HKLM\SOFTWARE\VirtIO-FS\MountPoint` and restarts the service).
 
-Se anche l'installer di WinFsp fosse mancante (host senza rete al primo
-avvio) e la VM è senza rete, lo script ti chiede di installarlo a mano:
+If even the WinFsp installer is missing (host without network on first
+boot) and the VM has no network, the script asks you to install it manually:
 <https://github.com/winfsp/winfsp/releases>.
 
-Tutto in un colpo: `./launch.sh --share` stampa questi stessi passaggi.
+All in one go: `./launch.sh --share` prints these same steps.
 
-### 6.2 Note
+### 6.2 Notes
 
-- Se la cartella host esiste già con file "vecchi", nessun problema: virtiofsd
-  la espone così com'è (solo serve leggibile/scrivibile dall'utente che lancia
-  la VM).
-- Le ACL/Linux non sono meaningful per Windows: i permessi dentro la VM sono
-  quelli dell'utente host che lancia `launch.sh`.
-- Le modifiche sono **immediatamente visibili** in entrambe le parti (stessa
-  cartella sul disco), senza refresh della rete.
-- Per condividere più cartelle: aggiungi un secondo `-chardev`/`-device` con
-  tag diverso (serve un `virtiofsd` per cartella), oppure esponi un'unica
-  cartella padre.
+- If the host folder already exists with "old" files, no problem: virtiofsd
+  exposes it as it is (it just needs to be readable/writable by the user who runs
+  the VM).
+- Linux ACLs are not meaningful to Windows: the permissions inside the VM are
+  those of the host user who runs `launch.sh`.
+- Changes are **immediately visible** on both sides (same
+  folder on disk), with no network refresh.
+- To share multiple folders: add a second `-chardev`/`-device` with
+  a different tag (one `virtiofsd` per folder), or expose a single
+  parent folder.
 
 ---
 
-## 7. Prestazioni e consigli
+## 7. Performance and tips
 
-- **Già ottimizzato nel launcher**: enlightenments Hyper-V, assenza di
-  `intel-iommu`/`kernel-irqchip=split` (che appesantivano ogni interrupt),
-  un solo controller USB, `discard=unmap`.
-- **Disco su SSD NVMe**: `win10.qcow2` vive su un disco USB esterno
-  (`r_await ~250 ms`): è il collo di bottiglia più grosso. Copia l'immagine
-  sull'NVMe interno e lancia da lì:
+- **Already optimized in the launcher**: Hyper-V enlightenments, absence of
+  `intel-iommu`/`kernel-irqchip=split` (which slowed down every interrupt),
+  a single USB controller, `discard=unmap`.
+- **Disk on an NVMe SSD**: `win10.qcow2` lives on an external USB disk
+  (`r_await ~250 ms`): it's the biggest bottleneck. Copy the image to the
+  internal NVMe and launch from there:
 
   ```bash
   cp --reflink=auto win10.qcow2 /mnt/storage/win10.qcow2
   ./launch.sh --disk /mnt/storage/win10.qcow2
   ```
 
-  (oppure sposta l'intera cartella; usa sempre `--disk` percorso-giusto).
-- **RAM/CPU**: sono **auto** (metà dei thread e circa metà della RAM
-  dell'host, vincolate 1-8 vCPU e 2G-16G): su un host con 8 thread/16 GB
-  parte con 4 vCPU e 8 GB, su un dual-core con 8 GB parte con 2 vCPU e
-  4 GB. Per forzarle: `./launch.sh --smp 4 --mem 6G`.
-- **Schermo**: `virtio-vga-gl` con `sdl,gl=on` usa l'OpenGL reale della GPU
-  host; se il 3D è lento in SDL, prova a sostituire `-display sdl,gl=on` con
+  (or move the whole folder; always use `--disk` with the correct path).
+- **RAM/CPU**: they are **auto** (half the threads and about half the host's
+  RAM, limited to 1-8 vCPUs and 2G-16G): on a host with 8 threads/16 GB
+  it starts with 4 vCPUs and 8 GB, on a dual-core with 8 GB it starts with 2 vCPUs and
+  4 GB. To force them: `./launch.sh --smp 4 --mem 6G`.
+- **Display**: `virtio-vga-gl` with `sdl,gl=on` uses the host GPU's real
+  OpenGL; if 3D is slow in SDL, try replacing `-display sdl,gl=on` with
   `-display gtk,gl=on`.
-- **Audio**: tieni un sink attivo sulla sessione host (altrimenti PipeWire
-  non ha dove mandare il suono).
+- **Audio**: keep an active sink on the host session (otherwise PipeWire
+  has nowhere to send the sound).
 
 ---
 
-## 8. Risoluzione problemi
+## 8. Troubleshooting
 
-| Sintomo | Causa | Rimedio |
+| Symptom | Cause | Fix |
 |---|---|---|
-| `ERRORE: /dev/kvm non accessibile` | utente fuori dal gruppo | `sudo usermod -aG kvm $USER` + re-login |
-| `Rete non pronta: ...` | rete non configurata | `./qemu-up.sh` (oppure `--net user`) |
-| VM senza internet | NAT/interfaccia sbagliata | ri-esegui `./qemu-up.sh` (l'uplink viene rilevato automaticamente), poi `ip route` per verificare |
-| `ERRORE: ... e' gia' in uso da un'altra istanza QEMU` | VM ancora aperta | chiudi la finestra VM; se non c'è: `pgrep -a qemu-system-x86_64` |
-| **Nessun audio** | QEMU girato con `sudo` (root non vede PipeWire) | avvia `./launch.sh` **senza sudo**; controlla `pactl list short sinks` |
-| `ERRORE: nessun display` | sessione grafica assente | lancia da un terminale nel desktop, o esporta `DISPLAY=:0` |
-| Rotella di Windows che gira a lungo | disco lento / boot lento | aspetta la prima volta (disattiva Fast Startup), valuta di spostare il qcow2 su NVMe (§7) |
-| Win11: "questo PC non supporta Windows 11" | manca TPM | usa `--tpm` |
-| Win11 parte ma si lamenta di Secure Boot | firmware senza chiavi MS | usa `--secureboot` (template `.ms`) |
-| La VM non vede la condivisione | manca WinFsp o il servizio non parte | §6.1, poi `sc.exe start VirtioFsSvc` |
-| `virtiofsd non e' partito` | pacchetto assente o cartella non accessibile | `sudo apt install virtiofsd`; verifica `ls -ld condivisa` |
-| Dispositivo `VirtIO FS Device` senza driver | setup mai eseguito | dentro Windows esegui `setup-virtiofs.bat` (§6.1) — i driver sono già nel disco `tools/` |
-| WinFsp mancante / servizio non parte | setup mai eseguito o installer mancante | rilancia `setup-virtiofs.bat` (usa `tools\winfsp*.msi`), altrimenti installa a mano (§6.1) |
-| VM muore con `block/vvfat.c ... Assertion` | `tools.img` non costruita: si usa il fallback `vvfat` | `sudo apt install dosfstools mtools`, poi `rm -f tools.img` e riprova (§6.1) |
-| Windows vede solo `C:` (il disco di setup non compare) | `tools.img` vecchia senza partizione («superfloppy», Windows non la monta) | chiudi la VM e rilancia `./launch.sh`: l'immagine viene rigenerata con partizione MBR (§6.1); se ancora niente, guarda in *Gestione disco* se il disco risulta non inizializzato/RAW |
-| Condivisione visibile ma lenta | disco host lento | stesso problema del qcow2: sposta la cartella su NVMe (§7) |
-| `swtpm non e' partito` | pacchetto mancante o stato corrotto | `sudo apt install swtpm swtpm-tools`; se persiste: `rm -rf swtpm/state && mkdir -p swtpm/state` |
-| Boot che parte dal CD invece che dal disco | lasciato `--iso` | lancia senza `--iso`, o premi ESC al logo OVMF per scegliere il dispositivo |
+| `ERROR: /dev/kvm not accessible` | user not in the group | `sudo usermod -aG kvm $USER` + re-login |
+| `ERROR: the network is still not ready` | network not configured | `./qemu-up.sh` (or `--net user`) |
+| VM has no internet | wrong NAT/interface | re-run `./qemu-up.sh` (the uplink is detected automatically), then `ip route` to check |
+| `ERROR: ... is already in use by another QEMU instance` | VM still open | close the VM window; if none: `pgrep -a qemu-system-x86_64` |
+| **No audio** | QEMU run with `sudo` (root can't see PipeWire) | start `./launch.sh` **without sudo**; check `pactl list short sinks` |
+| `ERROR: no display available` | no graphical session | launch from a terminal in the desktop, or export `DISPLAY=:0` |
+| Windows spinner spinning for a long time | slow disk / slow boot | wait the first time (disable Fast Startup), consider moving the qcow2 to NVMe (§7) |
+| Win11: "this PC doesn't support Windows 11" | TPM missing | use `--tpm` |
+| Win11 boots but complains about Secure Boot | firmware without MS keys | use `--secureboot` (`.ms` template) |
+| VM doesn't see the share | WinFsp missing or service won't start | §6.1, then `sc.exe start VirtioFsSvc` |
+| `ERROR: virtiofsd did not start` | package missing or folder not accessible | `sudo apt install virtiofsd`; check `ls -ld condivisa` |
+| `VirtIO FS Device` device without driver | setup never run | inside Windows run `setup-virtiofs.bat` (§6.1) — the drivers are already on the `tools/` disk |
+| WinFsp missing / service won't start | setup never run or installer missing | re-run `setup-virtiofs.bat` (uses `tools\winfsp*.msi`), otherwise install manually (§6.1) |
+| VM dies with `block/vvfat.c ... Assertion` | `tools.img` not built: the `vvfat` fallback is used | `sudo apt install dosfstools mtools`, then `rm -f tools.img` and retry (§6.1) |
+| Windows only sees `C:` (the setup disk doesn't appear) | old `tools.img` without a partition ("superfloppy", Windows won't mount it) | close the VM and re-run `./launch.sh`: the image is regenerated with an MBR partition (§6.1); if still nothing, check in *Disk Management* whether the disk shows as not initialized/RAW |
+| Share visible but slow | slow host disk | same problem as the qcow2: move the folder to NVMe (§7) |
+| `ERROR: swtpm did not start` | package missing or corrupted state | `sudo apt install swtpm swtpm-tools`; if it persists: `rm -rf swtpm/state && mkdir -p swtpm/state` |
+| Boot starts from the CD instead of the disk | left `--iso` on | launch without `--iso`, or press ESC at the OVMF logo to choose the device |
 
-**Debug del comando qemu:**
+**Debugging the qemu command:**
 
 ```bash
-./launch.sh --dry-run          # vedi la riga di comando completa
+./launch.sh --dry-run          # see the full command line
 ./launch.sh --dry-run --tpm --secureboot --net user
 ```
 
-**Monitor QEMU (senza aprire altre finestre):**
+**QEMU monitor (without opening other windows):**
 
 ```bash
 socat - UNIX-CONNECT:"$PWD/win10-monitor.sock"
@@ -463,26 +487,31 @@ socat - UNIX-CONNECT:"$PWD/win10-monitor.sock"
 
 ---
 
-## 9. Note sugli altri file
+## 9. Notes on the other files
 
-- `machine.sh` e `install.sh` sono script vecchi: `machine.sh` usa
-  `-soundhw ac97`, rimosso da QEMU 9+, quindi non funziona più. Usa
+- `machine.sh` and `install.sh` are old scripts: `machine.sh` uses
+  `-soundhw ac97`, removed in QEMU 9+, so it no longer works. Use
   `launch.sh` (§2, §4, §5).
-- `install.sh` si riferisce a un'ISO Fedora che non c'è nella cartella.
-- `ovmf/` contiene il vecchio firmware monoblocco `OVMF.fd` (4 MB): non serve
-  più, il launcher usa `OVMF/` in modalità pflash.
-- `swtpm/` contiene i sorgenti dello swtpm che è già installato nel sistema
-  (`/usr/bin/swtpm`): puoi usarli per ricompilarlo, non è necessario.
-- `swtpm/state/` e `OVMF_VARS_win10*.fd` contengono lo stato della VM
-  (TPM e NVRAM): **non cancellarli**, altrimenti Windows potrebbe non
-  avviarsi più (va poi rifatta la registrazione dell'arrancatore di boot).
+- `install.sh` refers to a Fedora ISO that isn't in the folder.
+- `ovmf/` contains the old monolithic `OVMF.fd` firmware (4 MB) and the
+  snakeoil test keys: no longer needed (the launcher uses `OVMF/` in
+  pflash mode), so it is **not in the repository**.
+- `swtpm/` contains the sources of the swtpm that is already installed on the system
+  (`/usr/bin/swtpm`): you can use them to recompile it, not required.
+- `swtpm/state/` and `OVMF_VARS_win10*.fd` contain the VM state
+  (TPM and NVRAM): they are not in the repository (they are recreated on first boot)
+  and must **not be deleted** during use, otherwise Windows might not
+  boot anymore (the boot manager would have to be redone).
 
 ---
 
-## 10. Licenza
+## 10. License
 
-Codice e documentazione sono rilasciati con licenza [MIT](LICENSE):
-puoi usarli, modificarli e ridistribuirli, anche commercialmente,
-purché venga mantenuto il copyright. I binari di terzi (ISO Windows,
-driver VirtIO, installer WinFsp, firmware UEFI) **non fanno parte del
-repository** e restano soggetti alle rispettive licenze.
+Code and documentation are released under the [MIT](LICENSE) license:
+you may use, modify, and redistribute them, even commercially,
+provided that the copyright is retained. The redistributed third-party
+components in the repository (UEFI firmware, VirtIO drivers, WinFsp
+installer, swtpm sources) remain subject to their respective licenses:
+see [THIRD_PARTY.md](THIRD_PARTY.md) for provenance and licenses.
+The Windows ISOs and serial keys are **not part of the repository**
+(Microsoft license): the links to download them are in §1.5.
