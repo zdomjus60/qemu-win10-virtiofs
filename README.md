@@ -476,3 +476,13 @@ socat - UNIX-CONNECT:"$PWD/win10-monitor.sock"
 - `swtpm/state/` e `OVMF_VARS_win10*.fd` contengono lo stato della VM
   (TPM e NVRAM): **non cancellarli**, altrimenti Windows potrebbe non
   avviarsi più (va poi rifatta la registrazione dell'arrancatore di boot).
+
+---
+
+## 10. Licenza
+
+Codice e documentazione sono rilasciati con licenza [MIT](LICENSE):
+puoi usarli, modificarli e ridistribuirli, anche commercialmente,
+purché venga mantenuto il copyright. I binari di terzi (ISO Windows,
+driver VirtIO, installer WinFsp, firmware UEFI) **non fanno parte del
+repository** e restano soggetti alle rispettive licenze.
