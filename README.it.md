@@ -116,13 +116,9 @@ kvm-ok                            # se hai installato cpu-checker
 ### 1.5 Le ISO (da scaricare: non fanno parte del repository)
 
 - **ISO di Windows** (serve solo per installare): scarica l'immagine ISO
-  ufficiale da Microsoft:
-
-  ```text
-  https://www.microsoft.com/software-download/windows10
-  ```
-
-  (per Windows 11: `https://www.microsoft.com/software-download/windows11`).
+  ufficiale da Microsoft —
+  [Windows 10](https://www.microsoft.com/software-download/windows10) oppure
+  [Windows 11](https://www.microsoft.com/software-download/windows11).
   Mettila in questa cartella e lancia `./launch.sh --iso-file NOME.iso`
   (l'opzione `--iso` senza argomenti usa il nome dell'ISO presente nella
   cartella d'origine di questa guida:
@@ -130,11 +126,19 @@ kvm-ok                            # se hai installato cpu-checker
 - **ISO dei driver virtio-win** (facoltativa): serve solo per agganciarla con
   `./launch.sh --drivers` ed installare i driver di rete dal CD (§4.1, §4.3).
   Per VirtIO-FS e WinFsp **non serve**: driver e installer sono già nel
-  repository sotto `tools/`. Ultima versione:
+  repository sotto `tools/`. Ultima versione (link statico ufficiale):
+  [virtio-win.iso](https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/stable-virtio/virtio-win.iso).
 
-  ```text
-  https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/stable-virtio/virtio-win.iso
+  Nel browser compare una pagina di verifica anti-bot (serve JavaScript) e a
+  volte il download non parte: più semplice scaricarla da terminale,
+  funziona subito (~840 MB):
+
+  ```bash
+  curl -L -o virtio-win.iso "https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/stable-virtio/virtio-win.iso"
   ```
+
+  `launch.sh` riconosce automaticamente qualunque file `virtio-win*.iso`
+  (sia `virtio-win.iso` che `virtio-win-0.1.302.iso`).
 
 ---
 

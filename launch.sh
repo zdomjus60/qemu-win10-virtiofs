@@ -40,6 +40,12 @@ SETUP_MODE=""            # image | dir (deciso nei controlli preliminari)
 
 WIN_ISO="en-us_windows_10_iot_enterprise_ltsc_2021_x64_dvd_257ad90f.iso"
 VIRTIO_ISO="virtio-win-0.1.262.iso"
+# accetta qualunque ISO virtio-win scaricata (virtio-win.iso, virtio-win-0.1.302.iso, ...)
+if [ ! -f "$VIRTIO_ISO" ]; then
+	for f in virtio-win*.iso; do
+		[ -f "$f" ] && { VIRTIO_ISO="$f"; break; }
+	done
+fi
 
 err()  { echo "ERROR: $*" >&2; exit 1; }
 warn() { echo "WARNING: $*" >&2; }
@@ -392,11 +398,11 @@ if [ "$DRYRUN" -eq 0 ]; then
 		warn "you are running as root: audio and display may not work. Run ./launch.sh as a normal user."
 	fi
 	if [ "$ISO" -eq 1 ]; then
-		[ -e "$WIN_ISO" ] || err "missing $WIN_ISO (needed for --iso)"
-		[ -e "$VIRTIO_ISO" ] || err "missing $VIRTIO_ISO (needed for --iso)"
+		[ -e "$WIN_ISO" ] || err "missing $WIN_ISO (needed for --iso): download a Windows ISO and pass it with --iso-file FILE (README §1.5)"
+		[ -e "$VIRTIO_ISO" ] || warn "virtio-win ISO not found: only the Windows ISO will be attached (download it for the CD driver flow, README §1.5)"
 	fi
 	if [ "$DRIVERS" -eq 1 ]; then
-		[ -e "$VIRTIO_ISO" ] || err "missing $VIRTIO_ISO (needed for --drivers)"
+		[ -e "$VIRTIO_ISO" ] || err "missing virtio-win ISO (needed for --drivers): download it, see README §1.5"
 	fi
 	if [ "$FS" -eq 1 ]; then
 		[ -n "$VIRTIOFSD_BIN" ] || err "virtiofsd not installed (sudo apt install virtiofsd) — or start with --no-share"
@@ -615,10 +621,8 @@ fi
 CDROM_ARGS=()
 BOOT_ARGS=(-boot c)
 if [ "$ISO" -eq 1 ]; then
-	CDROM_ARGS=(
-		-drive "file=$WIN_ISO,media=cdrom,readonly=on"
-		-drive "file=$VIRTIO_ISO,media=cdrom,readonly=on"
-	)
+	CDROM_ARGS=(-drive "file=$WIN_ISO,media=cdrom,readonly=on")
+	[ -e "$VIRTIO_ISO" ] && CDROM_ARGS+=(-drive "file=$VIRTIO_ISO,media=cdrom,readonly=on")
 	BOOT_ARGS=(-boot d)
 elif [ "$DRIVERS" -eq 1 ]; then
 	CDROM_ARGS=(-drive "file=$VIRTIO_ISO,media=cdrom,readonly=on")
