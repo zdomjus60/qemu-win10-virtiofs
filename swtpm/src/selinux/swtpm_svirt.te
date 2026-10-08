@@ -1,0 +1,42 @@
+policy_module(swtpm_svirt,1.0)
+
+########################################
+#
+# Requires Fedora 40
+#
+
+require {
+	type svirt_image_t;
+	type svirt_t;
+	type svirt_tcg_t;
+	type swtpm_exec_t;
+	type user_tmp_t;
+	type virtd_t;
+	type virtqemud_t;
+	type virt_var_run_t;
+}
+
+swtpm_domtrans(svirt_t)
+swtpm_domtrans(svirt_tcg_t)
+
+#============= svirt_t ==============
+allow svirt_t swtpm_exec_t:file entrypoint;
+
+# Due to session mode and usage of dir /run/user/*/libvirt/qemu/run/swtpm
+allow svirt_t user_tmp_t:sock_file { create setattr unlink };
+
+allow svirt_t virtd_t:dir search;
+# For passing encryption secret via pipe (see https://bugzilla.redhat.com/show_bug.cgi?id=2334271)
+allow svirt_t virtd_t:fifo_file { write read };
+allow svirt_t virtqemud_t:fifo_file write;
+allow svirt_t virt_var_run_t:dir { write add_name remove_name };
+allow svirt_t virt_var_run_t:file { create write setattr unlink };
+allow svirt_t virt_var_run_t:sock_file { create write setattr unlink };
+
+# For virt-install (see https://bugzilla.redhat.com/show_bug.cgi?id=2283878 )
+allow svirt_tcg_t user_tmp_t:sock_file { create setattr unlink };
+
+allow svirt_tcg_t swtpm_exec_t:file entrypoint;
+allow svirt_tcg_t svirt_image_t:file { map read write };  # also: domain_can_mmap_files
+allow svirt_tcg_t virtqemud_t:fifo_file write;
+allow svirt_tcg_t virtqemud_t:file { getattr open read };

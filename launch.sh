@@ -59,7 +59,7 @@ Options:
   --drivers           attach the virtio-win ISO only (optional: the setup
                       prepares drivers and WinFsp in tools/ by itself, no ISO needed)
   --tpm               start swtpm (TPM 2.0, required for Windows 11)
-  --secureboot        use OVMF with Secure Boot (snakeoil keys already present)
+  --secureboot        use OVMF with Secure Boot (Microsoft keys pre-enrolled)
   --net tap|user      network: tap0 with bridge/NAT (default) or rootless slirp
   --no-auto-net       if the tap network is missing, do not launch qemu-up.sh automatically
   --disk FILE         use a different qcow2 disk (default: $DISK)

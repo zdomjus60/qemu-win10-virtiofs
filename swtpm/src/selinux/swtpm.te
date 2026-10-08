@@ -1,0 +1,56 @@
+policy_module(swtpm, 1.0.0)
+
+########################################
+#
+# Requires Fedora 40
+#
+
+require {
+	type qemu_var_run_t;
+	type svirt_image_t;
+	type var_log_t;
+	type virt_log_t;
+	type virt_var_lib_t;
+	type virtqemud_t;
+	type virtqemud_tmp_t;
+	class file map;
+	tunable virt_use_nfs;
+}
+
+attribute_role swtpm_roles;
+roleattribute system_r swtpm_roles;
+
+type swtpm_t;
+type swtpm_exec_t;
+application_domain(swtpm_t, swtpm_exec_t)
+role swtpm_roles types swtpm_t;
+
+########################################
+#
+# swtpm local policy
+#
+allow swtpm_t qemu_var_run_t:file { create getattr open read unlink write };
+allow swtpm_t qemu_var_run_t:dir { add_name remove_name write };
+allow swtpm_t qemu_var_run_t:sock_file { create setattr unlink };
+allow swtpm_t var_log_t:file open;
+allow swtpm_t virt_var_lib_t:dir { add_name remove_name write };
+allow swtpm_t virt_var_lib_t:file { create rename setattr unlink write map };
+allow swtpm_t virtqemud_t:unix_stream_socket { read write getattr };
+allow swtpm_t virtqemud_tmp_t:file { open write };
+allow swtpm_t svirt_image_t:file { open append };  # BZ2306817
+allow swtpm_t virt_log_t:file open; # BZ2278123 Comment 39
+
+domain_use_interactive_fds(swtpm_t)
+
+files_read_etc_files(swtpm_t)
+
+auth_use_nsswitch(swtpm_t)
+
+miscfiles_read_localization(swtpm_t)
+
+tunable_policy(`virt_use_nfs',`
+	fs_manage_nfs_dirs(swtpm_t)
+	fs_manage_nfs_files(swtpm_t)
+	fs_read_nfs_symlinks(swtpm_t)
+	fs_mmap_nfs_files(swtpm_t)
+')

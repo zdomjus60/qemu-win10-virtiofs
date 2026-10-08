@@ -1,0 +1,28 @@
+#!/bin/sh
+cat <<_EOF_
+/etc/swtpm-localca.conf
+/etc/swtpm-localca.options
+/etc/swtpm_setup.conf
+/usr/bin/swtpm_bios
+/usr/bin/swtpm_ioctl
+/usr/bin/swtpm_localca
+/usr/bin/swtpm_setup
+/usr/lib/tmpfiles.d/swtpm-tmpfiles.conf
+/usr/lib/sysusers.d/swtpm-sysusers.conf
+/usr/share/man/man8/swtpm-create-tpmca.8*
+/usr/share/man/man8/swtpm-localca.8*
+/usr/share/man/man5/swtpm-localca.conf.5*
+/usr/share/man/man5/swtpm-localca.options.5*
+/usr/share/man/man8/swtpm_bios.8*
+/usr/share/man/man8/swtpm_cert.8*
+/usr/share/man/man8/swtpm_ioctl.8*
+/usr/share/man/man8/swtpm_localca.8*
+/usr/share/man/man8/swtpm_setup.8*
+/usr/share/man/man5/swtpm_setup.conf.5*
+/usr/share/swtpm/swtpm-create-tpmca
+/usr/share/swtpm/swtpm-create-user-config-files
+/usr/share/swtpm/swtpm-localca
+_EOF_
+if test -n "$(find $(dirname "$0")/tmp -name swtpm_cert)"; then
+echo "/usr/bin/swtpm_cert"
+fi

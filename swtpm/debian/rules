@@ -1,0 +1,22 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@
+
+override_dh_auto_configure:
+	NOCONFIGURE=1 ./autogen.sh
+	dh_auto_configure -- --with-openssl --with-gnutls --without-cuse --disable-hardening
+
+override_dh_install:
+	dh_install
+	# deploy swtpm's apparmor profile
+	dh_apparmor -pswtpm --profile-name=usr.bin.swtpm
+
+override_dh_auto_test:
+	SWTPM_TEST_SECCOMP_OPT="--seccomp action=none" make check VERBOSE=1
+
+override_dh_clean:
+	dh_clean --exclude=man/man8/swtpm-localca.8
+
+override_dh_makeshlibs:
+	dh_makeshlibs --no-scripts

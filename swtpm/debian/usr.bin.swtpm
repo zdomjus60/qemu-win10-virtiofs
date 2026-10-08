@@ -1,0 +1,46 @@
+# vim:syntax=apparmor
+# AppArmor policy for swtpm
+
+#include <tunables/global>
+
+profile swtpm /usr/bin/swtpm {
+  #include <abstractions/user-tmp>
+  #include <abstractions/base>
+  #include <abstractions/openssl>
+
+  # Site-specific additions and overrides. See local/README for details.
+  #include <local/usr.bin.swtpm>
+
+  capability chown,
+  capability dac_override,
+  capability dac_read_search,
+  capability fowner,
+  capability fsetid,
+  capability setgid,
+  capability setuid,
+  capability sys_admin,
+
+  network inet stream,
+  network inet6 stream,
+  unix (send) type=dgram addr=none peer=(addr=none),
+  unix (send, receive) type=stream addr=none peer=(label=libvirt-*),
+
+  /usr/bin/swtpm rm,
+
+  /run/libvirt/qemu/swtpm/*.pid rwk,
+  /run/libvirt/qemu/swtpm/*.sock rwk,
+  /var/lib/libvirt/swtpm/** wk,
+  /usr/share/swtpm/profiles/*.json r,  # distro profiles
+  /etc/swtpm/profiles/*.json r,        # local profiles
+  /tmp/** rwk,
+
+  owner /dev/vtpmx rw,
+  owner /etc/nsswitch.conf r,
+  owner /run/swtpm/sock rw,
+  owner /run/user/[0-9]*/libvirt/qemu/run/swtpm/*.pid rwk,
+  owner /run/user/[0-9]*/libvirt/qemu/run/swtpm/*.sock rwk,
+  owner /var/lib/libvirt/swtpm/** rwk,
+  owner /var/lib/swtpm/** rwk,
+  owner /var/log/swtpm/libvirt/qemu/*.log rwk,
+  owner @{HOME}/** rwk,
+}

@@ -1,0 +1,79 @@
+From ba6529ed84df010e2598f20b190957f15d52c66f Mon Sep 17 00:00:00 2001
+From: Stefan Berger <stefanb@linux.vnet.ibm.com>
+Date: Fri, 26 Feb 2021 18:45:57 -0500
+Subject: [PATCH 1/5] Deactivate test cases accessing rootcerts.txt
+
+rootcerts.txt contains files in a drive we don't have access to
+---
+ utils/regtests/testcredential.sh | 23 +++++++++++++----------
+ utils/regtests/testunseal.sh     |  4 ++--
+ 2 files changed, 15 insertions(+), 12 deletions(-)
+
+diff --git a/utils/regtests/testcredential.sh b/utils/regtests/testcredential.sh
+index 0392fa9..b70cdb2 100755
+--- a/utils/regtests/testcredential.sh
++++ b/utils/regtests/testcredential.sh
+@@ -310,12 +310,15 @@ NVNAME=(
+ 	${PREFIX}createek -high -pwde eee -pwdk kkk ${CALG[i]} -cp -nopub > run.out
+ 	checkSuccess $?
+ 
+-	echo "Validate the ${CALG[i]} EK certificate against the root"
+-	${PREFIX}createek -high ${CALG[i]} -root certificates/rootcerts.txt > run.out
+-	checkSuccess $?
++	#echo "Validate the ${CALG[i]} EK certificate against the root"
++	#${PREFIX}createek -high ${CALG[i]} -root certificates/rootcerts.txt > run.out
++	#checkSuccess $?
+ 
+ 	echo "Create a signing key under the ${CALG[i]} EK using the password"
+-	${PREFIX}create -hp 80000001 -si -pwdp kkk > run.out
++	# May need to repeat command due to this here:
++	# https://github.com/stefanberger/libtpms/blob/stable-0.9/src/tpm2/SessionProcess.c#L1204
++	${PREFIX}create -hp 80000001 -si -pwdp kkk > run.out || \
++		${PREFIX}create -hp 80000001 -si -pwdp kkk > run.out
+ 	checkSuccess $?
+ 
+ 	echo "Start a ${HALG[i]} policy session"
+@@ -424,9 +427,9 @@ NVNAME=(
+ 	${PREFIX}createek -high -pwde eee -pwdk kkk ${CALG[i]} -cp -nopub > run.out
+ 	checkSuccess $?
+ 
+-	echo "Validate the ${CALG[i]} EK certificate against the root"
+-	${PREFIX}createek -high ${CALG[i]} -root certificates/rootcerts.txt > run.out
+-	checkSuccess $?
++	#echo "Validate the ${CALG[i]} EK certificate against the root"
++	#${PREFIX}createek -high ${CALG[i]} -root certificates/rootcerts.txt > run.out
++	#checkSuccess $?
+ 
+ 	echo "Create a signing key under the ${CALG[i]} EK using the password"
+ 	${PREFIX}create -hp 80000001 -si -pwdp kkk > run.out
+@@ -574,9 +577,9 @@ NVNAME=(
+ 	${PREFIX}createek ${ALG} -pwde eee -cp > run.out
+ 	checkSuccess $?
+ 
+-	echo "Validate the ${ALG} EK certificate against the root"
+-	${PREFIX}createek ${ALG} -root certificates/rootcerts.txt > run.out
+-	checkSuccess $?
++	#echo "Validate the ${ALG} EK certificate against the root"
++	#${PREFIX}createek ${ALG} -root certificates/rootcerts.txt > run.out
++	#checkSuccess $?
+ 
+ 	echo "Start a policy session"
+ 	${PREFIX}startauthsession -se p > run.out
+diff --git a/utils/regtests/testunseal.sh b/utils/regtests/testunseal.sh
+index e7efd93..eb8d0e9 100755
+--- a/utils/regtests/testunseal.sh
++++ b/utils/regtests/testunseal.sh
+@@ -728,8 +728,8 @@ echo ""
+ 
+ echo "PROVISION: Create the EK for the salted session 80000000"
+ if   [ ${CRYPTOLIBRARY} == "openssl" ]; then
+-${PREFIX}createek -rsa 2048 -cp -noflush -root certificates/rootcerts.txt > run.out
+-elif [ ${CRYPTOLIBRARY} == "mbedtls" ]; then
++#${PREFIX}createek -rsa 2048 -cp -noflush -root certificates/rootcerts.txt > run.out
++#elif [ ${CRYPTOLIBRARY} == "mbedtls" ]; then
+ ${PREFIX}createek -rsa 2048 -cp -noflush -nopub > run.out
+ fi
+ checkSuccess $?
+-- 
+2.47.0
+

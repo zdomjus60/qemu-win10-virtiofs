@@ -1,0 +1,12 @@
+
+# shellcheck shell=bash
+
+# For the license, see the LICENSE file in the root directory.
+
+# Some distros may not have the device
+if [ ! -c /dev/vtpmx ]; then
+	if ! modprobe tpm_vtpm_proxy; then
+		echo "Skipping test using vtpm proxy module: module not available"
+		exit 77
+	fi
+fi

@@ -1,39 +1,46 @@
 # ============================================================
-# Immagini e binari grandi (dati personali / software con licenza)
+# ISO: non ridistribuibili (licenza Microsoft / Fedora).
+# Link di download nel README §1.5.
 # ============================================================
-*.qcow2
 *.iso
-*.img
-*.raw
-*.exe
-*.msi
 
 # ============================================================
-# Firmware UEFI: qui ci sono NVRAM con il seriale della VM e
-# chiavi. Il firmware "pulito" viene dal pacchetto Debian `ovmf`.
-# ============================================================
-OVMF/
-ovmf/
-*.fd
-
-# ============================================================
-# Seriale/licenza Windows
+# Seriale/licenza Windows: dato personale.
 # ============================================================
 seriale.txt
 
 # ============================================================
-# Stato TPM (macchina-specifico) e sorgenti swtpm di terze parti
+# Disco della VM (creato con ./launch.sh --create) e contenuti
+# di condivisa/ (dati personali): mai nel repository.
 # ============================================================
-swtpm/
+*.qcow2
+*.raw
+condivisa/*
+!condivisa/.gitkeep
 
 # ============================================================
-# Artefatti generati da launch.sh (ricreati da soli all'avvio)
+# Firmware legacy + chiavi di prova snakeoil (§9 del README:
+# non serve; il firmware buono e' OVMF/, che nel repo c'e').
 # ============================================================
+ovmf/
+
+# ============================================================
+# Stato generato automaticamente all'avvio: NVRAM UEFI,
+# tools.img, stato TPM, log.
+# ============================================================
+OVMF_VARS_win10*.fd
+*.img
 .tools-fs.tmp
-tools/viofs/
-tools/winfsp*
+swtpm/state/
 virtiofsd.log
 *.log
+
+# ============================================================
+# Installer WinFsp scaricati da launch.sh: quello del repo e'
+# gia' presente, eventuali versioni piu' nuove restano locali.
+# ============================================================
+tools/winfsp*
+!tools/winfsp-2.1.25156.msi
 
 # ============================================================
 # Socket, pid e altro stato runtime
@@ -41,13 +48,6 @@ virtiofsd.log
 *.sock
 *.pid
 *.lock
-
-# ============================================================
-# Contenuti della cartella condivisa (dati personali):
-# la cartella esiste nel repo, i file dentro no.
-# ============================================================
-condivisa/*
-!condivisa/.gitkeep
 
 # ============================================================
 # Editor e backup

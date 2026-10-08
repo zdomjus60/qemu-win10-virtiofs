@@ -1,0 +1,490 @@
+=head1 NAME
+
+swtpm_setup - Swtpm tool to simulate the manufacturing of a TPM 1.2 or 2.0
+
+=head1 SYNOPSIS
+
+B<swtpm_setup [OPTIONS]>
+
+=head1 DESCRIPTION
+
+B<swtpm_setup> is a tool that prepares the initial state for a libtpms-based
+TPM.
+
+The following options are supported:
+
+=over 4
+
+=item B<--runas <userid>>
+
+Use this userid to run swtpm_setup as. Only 'root' can use this option.
+
+=item B<--config <file>>
+
+Path to configuration file containing the tool to use for creating
+certificates; see also B<swtpm_setup.conf>
+
+If this parameter is not provided, the default configuration file
+will be used. The search order for the default configuration file is
+as follows. If the environment variable XDG_CONFIG_HOME is set,
+${XDG_CONFIG_HOME}/swtpm_setup.conf will be used if available, otherwise if
+the environment variable HOME is set, ${HOME}/.config/swtpm_setup.conf
+will be used if available. If none of the previous ones are available, /etc/swtpm_setup.conf
+will be used.
+
+=item B<--tpm-state <dir>> or B<--tpmstate <dir>>
+
+Path where the TPM's state will be written to; this is a mandatory argument.
+Prefix with dir:// to use directory backend, or file:// to use linear file.
+
+=item B<--tpm "path-to-executable socket">
+
+Path to the TPM executable; this is an optional argument and by default the
+swtpm executable found in the PATH will be used. To use 'swtpm' with this
+parameter it is necessary to pass along the 'socket' parameter. To emulate
+the default behavior this option could be used as follows:
+
+=over 2
+
+--tpm "$(type -P swtpm) socket"
+
+=back
+
+=item B<--tpm2>
+
+Do setup on a TPM 2; by default a TPM 1.2 is setup.
+
+=item B<--createek>
+
+Create an endorsement key (EK).
+
+=item B<--allow-signing>
+
+Create an EK that can sign. This option requires --tpm2.
+
+This option will create a non-standard EK. When re-creating the EK, TPM 2
+tools have to use the EK Template that is written at an NV index corresponding
+to the created EK (e.g., NV index 0x01c00004 for RS 2048 EK). Otherwise the
+tool-created EK will not correspond to the actual key being used or the
+modulus shown in the EK certificate.
+
+Note that the TCG specification "EK Credential Profile For TPM Family 2.0; Level 0"
+suggests in its section on "EK Usage" that "the Endorsement Key can be a
+created as a decryption or signing key." However, some platforms will
+not accept an EK as a signing key, or as a signing and encryption key, and
+therefore this option should be used very carefully.
+
+=item B<--decryption>
+
+Create an EK that can be used for key encipherment. This is the default
+unless --allow-signing is passed. This option requires --tpm2.
+
+=item B<--ecc>
+
+Create elliptic curve crypto (ECC) keys; by default RSA keys are generated.
+
+=item B<--take-ownership>
+
+Take ownership; this option implies --createek. This option is only available for TPM 1.2.
+
+=item B<--ownerpass  <password>>
+
+Provide custom owner password; default is 'ooo'. This option is only available for TPM 1.2.
+
+=item B<--owner-well-known>
+
+Use a password of all zeros (20 bytes of zeros) as the owner password.
+This option is only available for TPM 1.2.
+
+=item B<--srkpass <password>>
+
+Provide custom SRK password; default is 'sss'. This option is only available for TPM 1.2.
+
+=item B<--srk-well-known>
+
+Use a password of all zeros (20 bytes of zeros) as the SRK password.
+This option is only available for TPM 1.2.
+
+=item B<--create-ek-cert>
+
+Create an EK certificate; this implies --createek.
+
+=item B<--create-platform-cert>
+
+Create a platform certificate; this implies --create-ek-cert.
+
+=item B<--lock-nvram>
+
+Lock NVRAM access to all NVRAM locations that were written to.
+
+=item B<--display>
+
+At the end display as much info as possible about the configuration
+of the TPM.
+
+=item B<--logfile <logfile>>
+
+The logfile to log to. By default logging goes to stdout and stderr.
+
+=item B<--keyfile <keyfile>>
+
+The key file contains an ASCII hex key consisting of 32 hex digits with an
+optional leading '0x'. This is the key to be used by the TPM emulator
+for encrypting the state of the TPM. 
+
+=item B<--keyfile-fd <file descriptor>>
+
+Like B<--keyfile> but the key will be read from the file descriptor.
+
+=item B<--pwdfile <passphrase file>>
+
+The passphrase file contains a passphrase from which the TPM emulator
+will derive the encryption key from and use the key for encrypting the TPM
+state.
+
+=item B<--pwdfile-fd <file descriptor>>
+
+Like B<--pwdfile> but the passphrase will be read from the file descriptor.
+
+=item B<--ciper <cipher>>
+
+The cipher may be either aes-cbc or aes-128-cbc for 128 bit AES encryption,
+or aes-256-cbc for 256 bit AES encryption. The same cipher must be used
+on the I<swtpm> command line later on.
+
+=item B<--overwrite>
+
+Overwrite existing TPM state. All previous state will be erased.
+If this option is not given and an existing state file is found, an error
+code is returned.
+
+=item B<--not-overwrite>
+
+Do not overwrite existing TPM state. If existing TPM state is found, the
+program ends without an error.
+
+=item B<--vmid <VM ID>>
+
+Optional VM ID that can be used to keep track of certificates issued
+for VMs (or containers). This parameter will be passed through to the tool
+used for creating the certificates and may be required by that tool.
+
+=item B<--pcr-banks <PCR banks>>
+
+Optional comma-separated list of PCR banks to activate. Providing '-'
+allows a user to skip the selection and activates all PCR banks.
+If this option is not provided, the I<swtpm_setup.conf> configuration
+file will be consulted for the active_pcr_banks entry. If no such
+entry is found then the default set of PCR banks will be activated.
+The default set of PCR banks can be determined using the I<--help>
+option.
+
+=item B<--swtpm_ioctl <executable>>
+
+Pass the path to the swtpm_ioctl executable. By default the swtpm_ioctl
+in the PATH is used.
+
+=item B<--tcsd-system-ps-file <file>>
+
+This option is deprecated and has no effect (since v0.4).
+
+=item B<--rsa-keysize <keysize>> (since v0.4)
+
+This option allows to pass the size of a TPM 2 RSA EK key, such as 2048,
+3072, or 4096. The supported keysizes for a TPM 2 can be queried for using
+the I<--print-capabilities> option. The default size is 2048 bits for
+both TPM 1.2 and TPM 2. If 'max' is passed, the largest possible key
+size is used. It may be necessary to choose an approriate profile that
+supports this key size, such as 'default-v2' for RSA-4096 keys.
+
+=item B<--reconfigure> (since v0.7)
+
+This option allows the reconfiguration of the active PCR banks of a
+TPM 2 using the I<--pcr-banks> option.
+
+=item B<--profile <json-profile>> (since v0.10)
+
+Configure a TPM 2 with the given profile. Example profiles look
+like this:
+
+    {"Name": "null"}
+
+    {"Name": "default-v1"}
+
+    {
+     "Name": "custom",
+     "Algorithms":"rsa,rsa-min-size=1024,tdes-min-size=128,hmac,aes,\
+                   aes-min-size=128,mgf1,keyedhash,xor,sha256,sha384,\
+                   sha512,null,rsassa,rsaes,rsapss,oaep,ecdsa,ecdh,ecdaa,\
+                   sm2,ecschnorr,ecmqv,kdf1-sp800-56a,kdf2,kdf1-sp800-108,\
+                   ecc,ecc-min-size=192,ecc-nist,ecc-bn,symcipher,camellia,\
+                   camellia-min-size=128,cmac,ctr,ofb,cbc,cfb,ecb"
+    }
+
+
+The JSON profile must contain the 'name' field with a name of a profile
+supported by libtpms. Only the 'custom' profile, or profiles whose name
+starts with 'custom:', are modifiable and may contain Algorithms, Commands, or
+Attributes fields with user selections. Unknown fields in the JSON profile
+will be ignored. For further information see the swtpm man page.
+
+=item B<--profile-name <profile filename| built-in profile name> (since v0.10)
+
+Configure a TPM 2 with a profile loaded from either one of the following
+locations in the shown order, unless qualified by a prefix:
+
+=over 2
+
+=item * local profiles dir specified in swtpm_setup.conf as
+'local_profiles_dir'; to force loading the profile from this directory,
+prefix the name with 'local:'
+
+=item * distro profile dir, which is typically /usr/share/swtpm/profiles; to
+force loading the profile from this directory prefix the name with 'distro:'
+
+=item * instantiate a libtpms built-in profile; to force a built-in profile
+prefix the name with 'builtin:'
+
+=back
+
+All profiles loaded from the above mentioned directories require that the
+file is available under the given name with '.json' appended.
+
+Use the I<--print-profiles> and I<--tpm2> options to display all available
+profiles.
+
+=item B<--profile-file <file>> (since v0.10)
+
+Configure a TPM 2 with a profile from a file.
+
+=item B<--profile-file-fd <fd>> (since v0.10)
+
+Configure a TPM 2 with a profile read from a file descriptor.
+
+=item B<--profile-remove-disabled check|fips-host> (since v0.10)
+
+When this option is passed then swtpm will remove algorithms from the given
+profile that OpenSSL cannot use when FIPS mode is enabled on the host. If
+the I<check> parameter is given then algorithms are tested before they are
+removed while the I<fips-host> parameter forces the removal of all potentially
+disabled algorithms without testing them.
+
+This option only works if the 'custom' profile is referenced by passing
+I<--profile '{"Name":"custom:test"}'> for example.
+
+This option passes the I<remove-disable> option parameter as part of the
+I<--profile> option to swtpm. For further information see the man page for
+I<swtpm>.
+
+=item B<--print-profiles> (since v0.10)
+
+Print all profiles found in the local and disto profiles directories and
+display the built-in ones. All profiles stored in files must have the .json
+extension. The names in the displayed JSON will show the name under
+which these profiles can be loaded with the I<--profile-name> option,
+i.e., they will show their filename without the .json extension. Therefore,
+a profile with filename myprofile.json will show the I<Name> 'myprofile'.
+The author of the profile may want to set the I<Name> in the profile's JSON
+to 'custom:myprofile'.
+
+=item B<--print-capabilities> (since v0.2)
+
+Print capabilities that were added to swtpm_setup after version 0.1.
+The output may contain the following:
+
+    {
+      "type": "swtpm_setup",
+      "features": [
+        "tpm-1.2",
+        "tpm-2.0",
+        "cmdarg-keyfile-fd",
+        "cmdarg-pwdfile-fd",
+        "tpm12-not-need-root",
+        "cmdarg-write-ek-cert-files",
+        "cmdarg-create-config-files",
+        "cmdarg-reconfigure-pcr-banks",
+        "tpm2-rsa-keysize-2048",
+        "tpm2-rsa-keysize-3072",
+        "tpm2-rsa-keysize-4096",
+        "cmdarg-profile",
+        "cmdarg-profile-remove-disabled"
+      ],
+      "version": "0.7.0"
+    }
+
+The version field is available since v0.7.
+
+The meaning of the feature verbs is as follows:
+
+=over 4
+
+=item B<cmdarg-key-fd> (since v0.2)
+
+The I<--keyfile-fd> option is supported.
+
+=item B<cmdarg-pwd-fd> (since v0.2)
+
+The I<--pwdfile-fd> option is supported.
+
+=item B<cmdarg-write-ek-cert-files> (since v0.7)
+
+The I<--write-ek-cert-files> option is supported.
+
+=item B<cmdarg-create-config-files> (since v0.7)
+
+The I<--create-config-files> option is supported.
+
+=item B<cmdarg-reconfigure-pcr-banks> (since v0.7)
+
+The I<--reconfigure> option is supported and allows the reconfiguration of
+the active PCR banks.
+
+=item B<tpm2-rsa-keysize-2048, ...> (since v0.4)
+
+The shown RSA key sizes are supported for a TPM 2's EK key. If none of the
+tpm2-rsa-keysize verbs is shown then only RSA 2048 bit keys are supported.
+
+=item B<tpm12-not-need-root> (since v0.4)
+
+This option implies that any user can setup a TPM 1.2. Previously only root
+or the 'tss' user, depending on configuration and availability of this account,
+could do that.
+
+=item B<tpm-1.2> (since v0.7)
+
+TPM 1.2 setup is supported (libtpms is compiled with TPM 1.2 support).
+
+=item B<tpm-2.0> (since v0.7)
+
+TPM 2 setup is supported (libtpms is compiled with TPM 2 support).
+
+=item B<cmdarg-profile> (since v0.10)
+
+The I<--profile>, I<profile-file>, and I<--profile-file-fd> options are
+supported.
+
+=item B<cmdarg-profile-remove-disabled> (since v0.10)
+
+The I<--profile-remove-disabled> option is supported.
+
+=back
+
+=item B<--write-ek-cert-files <directory>> (since v0.7)
+
+This option causes endorsement key (EK) files to be written into the provided
+directory. The files contain the DER-formatted EKs that were written into the
+NVRAM locations of the TPM 1.2 or TPM 2. The EK files have the filename pattern
+of ek-<key type>.crt. Example for filenames are ek-rsa2048.crt, ek-rsa3072.crt,
+and ek-secp384r1.crt.
+
+The keys that are written for a TPM 2 may change over time as the default
+strength of the EK keys changes. This means that one should look for all
+files with the above filename pattern when looking for the EKs.
+
+=item B<--create-config-files [[overwrite][,root][,skip-if-exist]]> (since v0.7)
+
+This option allows a user to create configuration files for swtpm_setup and
+swtpm-localca under the $XDG_CONFIG_HOME or $HOME/.config directories.
+
+The configuration files will not be created if any one of them already
+exists and in this case the program will report the first file it finds
+and exit with an error code.
+
+The meaning of the options is as follows:
+
+=over 4
+
+=item B<overwrite>
+
+Overwrite any existing configuration files.
+
+=item B<root>
+
+Create the configuration files even under the root account. These
+configuration files may then shadow any other existing configuration files,
+such as /etc/swtpm-localca.conf for example.
+
+=item B<skip-if-exist>
+
+Do nothing if any one of the configuration files that would be created already
+exists. The program will exit without error code.
+
+=back
+
+Note: The case when a user is part of the group that is allowed to access
+the default configuration files' paths is currently not handled. On many
+systems this may be the case when a user is part of the 'tss' group. In
+this case it is recommended that the user replace the swtpm-localca.conf
+created with this command with a symbolic link to /etc/swtpm-localca.conf.
+
+=item B<--help, -h>
+
+Display the help screen
+
+=back
+
+=head1 EXAMPLE USAGE
+
+To simulate manufacturing of a TPM, one would typically run the following command:
+
+  #> sudo swtpm_setup --tpmstate /tmp/mytpm1/ \
+      --create-ek-cert --create-platform-cert --lock-nvram
+
+Note: since v0.4 TPM 1.2 setup does not require root rights anymore.
+
+Any user can also simulate the manufacturing of a TPM using the
+swtpm_localca utility. The following example assumes that the user has
+set the environment variable XDG_CONFIG_HOME as follows (using bash for
+example):
+
+    export XDG_CONFIG_HOME=~/.config
+
+Note: The XDG_CONFIG_HOME variable is part of the XDG Base Directory
+Specification.
+
+The following configuration files need to be created:
+
+~/.config/swtpm_setup.conf:
+
+    # Program invoked for creating certificates
+    create_certs_tool= /usr/share/swtpm/swtpm-localca
+    create_certs_tool_config = ${XDG_CONFIG_HOME}/swtpm-localca.conf
+    create_certs_tool_options = ${XDG_CONFIG_HOME}/swtpm-localca.options
+
+~/.config/swtpm-localca.conf:
+
+    statedir = ${XDG_CONFIG_HOME}/var/lib/swtpm-localca
+    signingkey = ${XDG_CONFIG_HOME}/var/lib/swtpm-localca/signkey.pem
+    issuercert = ${XDG_CONFIG_HOME}/var/lib/swtpm-localca/issuercert.pem
+    certserial = ${XDG_CONFIG_HOME}/var/lib/swtpm-localca/certserial
+
+~/.config/swtpm-localca.options:
+
+    --platform-manufacturer Fedora
+    --platform-version 2.12
+    --platform-model QEMU
+
+Note: The tool swtpm-create-user-config-files can be used to create such
+files (with different content):
+
+  #> /usr/share/swtpm/swtpm-create-user-config-files
+  Writing /home/stefanb/.config/swtpm_setup.conf.
+  Writing /home/stefanb/.config/swtpm-localca.conf.
+  Writing /home/stefanb/.config/swtpm-localca.options.
+
+The following commands now create a TPM 2 with an EK and platform
+certificate. The state of the TPM 2 will be stored in the directory
+${XDG_CONFIG_HOME}/mytpm1.
+
+  #> mkdir -p ${XDG_CONFIG_HOME}/mytpm1
+  #> swtpm_setup --tpm2 --tpmstate ${XDG_CONFIG_HOME}/mytpm1 \
+      --create-ek-cert --create-platform-cert --lock-nvram
+
+
+=head1 SEE ALSO
+
+B<swtpm_setup.conf>
+
+=head1 REPORTING BUGS
+
+Report bugs to Stefan Berger <stefanb@linux.ibm.com>

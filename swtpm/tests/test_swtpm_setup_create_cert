@@ -1,0 +1,129 @@
+#!/usr/bin/env bash
+
+# For the license, see the LICENSE file in the root directory.
+
+ROOT=${abs_top_builddir:-$(dirname "$0")/..}
+TESTDIR=${abs_top_testdir:-$(dirname "$0")}
+
+source "${TESTDIR}/common"
+skip_test_no_tpm12 "${SWTPM_EXE}"
+
+workdir="$(mktemp -d)" || exit 1
+
+SIGNINGKEY=${workdir}/signingkey.pem
+ISSUERCERT=${workdir}/issuercert.pem
+CERTSERIAL=${workdir}/certserial
+
+PATH=${ROOT}/src/swtpm_bios:$PATH
+
+trap "cleanup" SIGTERM EXIT
+
+function cleanup()
+{
+	rm -rf "${workdir}"
+}
+
+# We want swtpm_cert to use the local CA and see that the
+# local CA script automatically creates a signingkey and
+# self-signed certificate; use ${WORKDIR} in the config files
+# to test env variable resolution
+
+cat <<_EOF_ > "${workdir}/swtpm-localca.conf"
+statedir=\${WORKDIR}
+signingkey = \${WORKDIR}/signingkey.pem
+issuercert = \${WORKDIR}/issuercert.pem
+certserial = \${WORKDIR}/certserial
+_EOF_
+
+cat <<_EOF_ > "${workdir}/swtpm-localca.options"
+--tpm-manufacturer IBM
+--tpm-model swtpm-libtpms
+--tpm-version 1.2
+--platform-manufacturer Fedora
+--platform-version 2.1
+--platform-model QEMU
+_EOF_
+
+cat <<_EOF_ > "${workdir}/swtpm_setup.conf"
+create_certs_tool=${SWTPM_LOCALCA}
+create_certs_tool_config=\${WORKDIR}/swtpm-localca.conf
+create_certs_tool_options=\${WORKDIR}/swtpm-localca.options
+_EOF_
+
+# We need to adapt the PATH so the correct swtpm_cert is picked
+export PATH=${ROOT}/src/swtpm_cert:${PATH}
+
+# Create a ROOT CA with a password-protected private key
+export SWTPM_ROOTCA_PASSWORD=password
+
+# we need to create at least one cert: --create-ek-cert
+if ! WORKDIR=${workdir} $SWTPM_SETUP \
+	--tpm-state "${workdir}" \
+	--create-ek-cert \
+	--config "${workdir}/swtpm_setup.conf" \
+	--logfile "${workdir}/logfile" \
+	--tpm "${SWTPM_EXE} socket ${SWTPM_TEST_SECCOMP_OPT}" \
+	--write-ek-cert-files "${workdir}";
+then
+	echo "Error: Could not run $SWTPM_SETUP."
+	echo "Setup Logfile:"
+	cat "${workdir}/logfile"
+	exit 1
+fi
+
+if [ ! -r "${SIGNINGKEY}" ]; then
+	echo "Error: Signingkey file ${SIGNINGKEY} was not created."
+	echo "Setup Logfile:"
+	cat "${workdir}/logfile"
+	exit 1
+fi
+
+if [ ! -r "${ISSUERCERT}" ]; then
+	echo "Error: Issuer cert file ${ISSUERCERT} was not created."
+	echo "Setup Logfile:"
+	cat "${workdir}/logfile"
+	exit 1
+fi
+
+if [ ! -r "${CERTSERIAL}" ]; then
+	echo "Error: Cert serial number file ${CERTSERIAL} was not created."
+	echo "Setup Logfile:"
+	cat "${workdir}/logfile"
+	exit 1
+fi
+
+if ! grep -q "ENCRYPTED PRIVATE KEY" "${workdir}/swtpm-localca-rootca-privkey.pem"; then
+	echo "Error: Root CA's private key should be encrypted"
+	cat "${workdir}/swtpm-localca-rootca-privkey.pem"
+	exit 1
+fi
+
+certfile="${workdir}/ek-rsa2048.crt"
+if [ ! -f "${certfile}" ]; then
+	echo "Error: EK file '${certfile}' was not written."
+	ls -l "${workdir}"
+	exit 1
+fi
+
+if ! $CERTTOOL --inder --infile "${certfile}" -i | grep -q "2048 bits"; then
+	echo "Error: EK file '${certfile}' is not an RSA 2048 bit key."
+	$CERTTOOL --inder --infile "${certfile}" -i
+	exit 1
+fi
+
+expiration="$($CERTTOOL --inder --infile "${certfile}" -i | grep "Not After:")"
+expected1="Not After: Fri Dec 31 23:59:59 UTC 9999"
+# 32bit machines
+expected2="Not After: Thu Dec 31 23:23:23 UTC 2037"
+if ! echo "${expiration}" | grep -q "${expected1}" && \
+   ! echo "${expiration}" | grep -q "${expected2}"; then
+	echo "Error: EK file '${certfile}' does not expire in 9999 or 2037"
+	echo "actual   : ${expiration}"
+	echo "expected1: ${expected1}"
+	echo "expected2: ${expected2} (32 bit machines)"
+	exit 1
+fi
+
+echo "OK"
+
+exit 0

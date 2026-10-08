@@ -1,0 +1,126 @@
+#!/usr/bin/env bash
+
+# For the license, see the LICENSE file in the root directory.
+
+ROOT=${abs_top_builddir:-$(dirname "$0")/..}
+TESTDIR=${abs_top_testdir:-$(dirname "$0")}
+
+source "${TESTDIR}/common"
+
+trap "cleanup" SIGTERM EXIT
+
+function cleanup()
+{
+	rm -rf "${workdir}"
+}
+
+workdir="$(mktemp -d)" || exit 1
+
+# Simple tests with options and combination of options
+
+if ! ${SWTPM_SETUP} --help &>/dev/null; then
+	echo "Error: Displaying help screen failed"
+	exit 1
+fi
+
+if ! ${SWTPM_SETUP} --version &>/dev/null; then
+	echo "Error: Displaying version info failed"
+	exit 1
+fi
+
+# Omit --tpm-state
+if ${SWTPM_SETUP} --overwrite 2>/dev/null; then
+	echo "Error: Should have failed without --tpmstate option"
+	exit 1
+fi
+
+# Options that require --tpm2
+for opt in --ecc --create-spk --reconfigure --allow-signing --decryption '--pcr-banks -'; do
+	if ${SWTPM_SETUP} --tpmstate "dir://${workdir}" --overwrite ${opt:+${opt}} 2>/dev/null; then
+		echo "Error: Option ${opt} should have required --tpm2"
+		exit 1
+	fi
+done
+
+# Unreasonble RSA key size
+if ${SWTPM_SETUP} --tpmstate "dir://${workdir}" --overwrite --tpm2 --rsa-keysize 2222 &>/dev/null; then
+	echo "Error: Should have failed with unreasonable key size"
+	exit 1
+fi
+
+# Unsupported option with --tpm2
+if ${SWTPM_SETUP} --tpmstate "dir://${workdir}" --overwrite --tpm2 --take-ownership 2>/dev/null; then
+	echo "Error: Option ${opt} should have failed with --tpm2"
+	exit 1
+fi
+
+# Unsupported cipher
+if ${SWTPM_SETUP} --tpmstate "dir://${workdir}" --overwrite --cipher aes-192-cbc &>/dev/null; then
+	echo "Error: Should have failed on unsupported cipher aes-192-cbc"
+	exit 1
+fi
+
+# Unsupported option combination
+if ${SWTPM_SETUP} --tpmstate "dir://${workdir}" --overwrite --tpm2 --create-ek-cert --reconfigure 2>/dev/null; then
+	echo "Error: Should have failed on unsupported option combination"
+	exit 1
+fi
+
+echo "Test 1: Ok"
+cleanup
+
+if [ "$(id -u)" -eq 0 ]; then
+	echo "Skipping fruther tests: Not running tests as root."
+	exit 0
+fi
+
+FILES="swtpm-localca.conf swtpm-localca.options swtpm_setup.conf"
+
+if ! XDG_CONFIG_HOME="${workdir}" ${SWTPM_SETUP} \
+	--create-config-files 1>/dev/null;
+then
+	echo "Error: Could not created config files (without parameters)"
+	exit 1
+fi
+for f in ${FILES}; do
+	if ! [ -f "${workdir}/${f}" ]; then
+		echo "Error: File ${workdir}/${f} was not created"
+		exit 1
+	fi
+done
+if ! [ -d "${workdir}/var/lib/swtpm-localca" ]; then
+	echo "Error: Directory var/lib/swtpm-localca was not created"
+	exit 1
+fi
+
+if ! XDG_CONFIG_HOME="${workdir}" ${SWTPM_SETUP} \
+	--create-config-files skip-if-exist 1>/dev/null;
+then
+	echo "Error: skip-if-exists should have exit'ed with 0."
+	exit 1
+fi
+
+echo "Test 2: Ok"
+cleanup
+
+if ! XDG_CONFIG_HOME="${workdir}" ${SWTPM_SETUP} \
+	--create-config-files skip-if-exist 1>/dev/null;
+then
+	echo "Error: skip-if-exists should have exit'ed with 0."
+	exit 1
+fi
+for f in ${FILES}; do
+	if ! [ -f "${workdir}/${f}" ]; then
+		echo "Error: File ${workdir}/${f} was not created"
+		exit 1
+	fi
+done
+if ! [ -d "${workdir}/var/lib/swtpm-localca" ]; then
+	echo "Error: Directory var/lib/swtpm-localca was not created"
+	exit 1
+fi
+
+echo "Test 3: Ok"
+cleanup
+
+exit 0

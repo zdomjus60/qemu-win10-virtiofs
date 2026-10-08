@@ -1,0 +1,313 @@
+CHANGES - changes for swtpm
+
+version 0.10.0:
+   - swtpm:
+     - Requires libtpms v0.10.0
+     - Display tpmstate-opt-lock as a new capability
+     - Add support for lock option parameter to tpmstate option
+     - nvstore_linear: Add support for file-backend locking
+     - Remove broken logic to check for neither dir nor file backend
+     - Use ptm_cap_n to build PTM_GET_CAPABILITY response
+     - Define a structure to return PTM_GET_CAPABILITY result
+     - Implement --print-info to run TPMLIB_GetInfo with flags
+     - Support --profile fd=<fd> to read profile from file descriptor
+     - Support --profile file=<filename> to read profile from file
+     - Ignore remove-disabled parameter on non-'custom' profile
+     - Check for good entropy source in chroot environment
+     - Implement a check for HMAC+sha1 for testing future restriction
+     - Implement function to check whether a crypto algorithm is disabled
+     - Print cmdarg-print-profiles as part of capabilities
+     - Check whether SHA1 signature support is disabled in profile
+     - Use TPMLIB_WasManufactured to check whether profile was applied
+     - Determine whether OpenSSL needs to be configured (FIPs, SHA1 signature)
+     - Add support for --print-profiles option
+     - Print profile names as part of capabilities JSON
+     - Display new capability to allow setting a profile
+     - Add support for --profile option to set a profile on TPM 2
+   - swtpm_setup:
+     - Comment flags for storage primary key and deprecate --create-spk
+     - Implement --print-profiles to display all profile
+     - Add profile entries to swtpm_setup.conf written by swtpm_setup
+     - Add support for --profile-name option
+     - Accept profiles with name starting with 'custom:'
+     - Support default profile from file in swtpm_setup.conf
+     - Support --profile-file-fd to read profile from file descriptor
+     - Support --profile-file <file> to read profile from file
+     - Always log the active profile
+     - Implement --profile-remove-fips-disabled option
+     - Read default profile from swtpm_setup.conf
+     - Print profile names as part of capabilities JSON
+     - Add support for --profile parameter
+     - Get default rsa keysize from setup_setup.conf if not given
+   - swtpm_ioctl:
+     - Use ptm_cap_n for non-CUSE PTM_GET_CAPABILITY response
+   - selinux:
+     - Change write to append for appending to log
+     - Add rule for logging to svirt_image_t labeled files from swtpm_t
+   - tests:
+     - Update IBMTSS2 test suite to v2.4.0
+     - Test activation of PCR banks when not all are available
+     - Enable SWTPM_TEST_PROFILE for running test_tpm2_ibmtss2 with profile
+     - Add a check for OPENSSL_ENABLE_SHA1_SIGNATURES in log file
+     - Consolidate custom profile test cases and check for StateFormatLevel
+     - Convert test_samples_create_tpmca to run installed
+     - Mention test_tpm2_libtpms_versions_profiles requiring env. variables
+     - allow running ibmtss2 tests against installed version
+     - Derive support for CUSE from SWTPM_EXE help screen
+     - Set OPENSSL_ENABLE_SHA1_SIGNATURES=1 for IBMTSS2 test
+     - Extend test case testing across libtpms versions
+     - Add test case for testing profiles across libtpms versions
+     - Test the --profile option of swtpm_setup and swtpm
+     - teach them to run installed
+     - add installed-runner.sh
+     - install tests on the system
+     - lookup system binaries if INSTALLED is set
+   - build-sys:
+     - enable 64-bit file API on 32-bit systems
+     - Add -Wshadow to the CFLAGS
+     - Require that libtpms v0.10 is available for TPMLIB_SetProfile
+   - debian:
+     - Add rule to allow usage of /var/tmp directory (QEMU)
+     - Add rules for reading profiles from distro and local dirs
+     - Allow non-owner file write access in /var/lib/libvirt/swtpm/
+     - Add sys_admin capability to apparmor profile
+
+version 0.9.0:
+  Note: The SElinux policy for swtpm was completely redone. For systems
+        with an SELinux policy the same policy (>= 40.17) as used in
+        Fedora >= 40 is required due to changes in labels related to libvirt
+        that made the re-development of the SELinux policy necessary.
+  - swtpm:
+    - Use umask() to create/truncated state file rather than fchmod()
+    - Use fchmod to set mode bits provided by user
+    - Replace mkstemp with g_mkstemp_full (Coverity)
+    - fix typo in help message
+    - cuse: Fix Coverity complaints regarding locks
+    - Fix double free in error path
+    - Close fd after main loop
+    - Restore logging to stderr on log open failure
+  - swtpm_setup:
+    - Fail --pcr-banks without --tpm2
+    - Fail --decryption or --allow-signing without --tpm2
+    - Initialized @argv in get_swtpm_capabilities()
+    - Flush spk after persisting to create room for another key
+    - Refactor duplicate code into swtpm_tpm2_write_cert_nvram
+    - Move persisting of certificate into tpm2_persist_certificate
+    - Pass key_type to function creating filename for key
+    - Add scheme parameter before curveid to createprimary_ecc
+    - Rename is_ek to preserve for future extension
+    - Mask-out EK and plaform certificate flags and set cert_flags
+    - Move common code into new function read_certificate_file()
+    - Exit with '0' upon --version rather than '1'
+    - Close file descriptors passed to swtpm process on parent side
+    - Make stdout unbuffered
+    - Use medium duration on TSC_PhysicalPresence to avoid timeouts
+    - Add poll() after write() and before read() to detect errors
+  - swtpm_localca:
+    - Add support for up to 20 bytes serial numbers
+    - Introduce --key as more generic alias for --ek
+    - Add missing NULL option to end of array
+    - Make stdout unbuffered
+  - swtpm_cert:
+    - Add support for serial numbers up to 20 bytes long
+  - swtpm_ioctl:
+    - Separate return code from flags
+    - Repeatedly call PTM_GET_INFO for long responses
+  - selinux:
+    - Re-add rule for svirt_tcg_t and user_tmp_t:sock_file (virt-install)
+    - New SELinux policy that requires Fedora 40 or later
+  - tests:
+    - Fixed occurrences of stray '\' before '-'
+    - Rearrange order of test cases to run some also as 'root'
+    - Add tests for command line options and combinations of options
+    - Add softhsm_setup to shellcheck'ed files and fix issues
+    - Add missing 'exit 1' on unexpected file size on --reconfigure
+    - Add test cases for swtpm_cert with max serial number
+    - Fix spelling mistakes
+    - reformat regexs for easier readability and extension
+    - ibmtss2: Add patch to disable x509 test with older libtpms
+    - Upgrade to ibmtss2 v2.0.1
+    - Fixed several issues detected by shellcheck
+  - build-sys:
+    - Add support for --disable-tests to disable tests
+    - Display GMP_LIBS and GMP_CFLAGS
+    - Only display warning if pkg-config for gmp fails
+    - Add gmp library and devel package as dependency
+    - use PKG_CHECK_MODULES to check libtpms version
+  - rpm:
+    - Add gmp library and devel package as dependency
+    - Split off SELinux files to build an selinux package
+  - debian:
+    - Sync AppArmor profile with what is used by Ubuntu
+    - Add gmp library and devel package as dependency
+    - Allow apparmor access to qemu session bus swtpm files
+
+version 0.8.0:
+  - swtpm:
+    - Implement release-lock-outgoing parameter for --migration option
+    - Introduce --migration option and 'incoming' parameter
+    - Implement terminate parameter for ctrl channel loss
+    - Add a chroot option
+    - Introduce disable-auto-shutdown flag for --flags option
+    - If necessary send TPM2_Shutdown() before TPMLIB_Terminate()
+    - Add some more recent syscalls to seccomp profile
+    - Disable OpenSSL FIPS mode to avoid libtpms failures
+    - Avoid locking directory multiple times
+    - Remove support for pre-v0.1 state files without header
+    - Use uint64_t in tlv_data_append() to avoid integer overflows
+    - Use uint64_t to avoid integer wrap-around when adding a uint32_t
+    - Do not chdir(/) when using --daemon
+    - Check header size indicator against expected size (CVE-2022-23645)
+    - Fixes for gcc 12.2.1 -fanalyzer
+  - build-sys:
+    - Fix configure script to support _FORTIFY_SOURCE=3
+    - Define __USE_LINUX_IOCTL_DEFS in header file (Cygwin)
+  - swtpm-localca:
+    - Re-implement variable resolution for swtpm-localca.conf
+    - Test for available issuercert before creating CA
+  - swtpm_setup:
+    - Configure swtpm to log to stdout/err if needed (glib >=2.74)
+  - tests:
+    - Use ${WORKDIR} in config files to test env. var replacement
+    - Patch IBM TSS2 test suite for OpenSSL 3.x
+  - build-sys:
+    - Add probing for -fstack-protector
+
+version 0.7.0:
+  - swtpm:
+    - Support for linear file storage backend (file://)
+    - Report 'tpm-1.2' & 'tpm-2.0' in --print-capabilities depending what
+      libtpms supports
+    - Add implementation of SWTPM_HMAC using OpenSSL 3.0 APIs
+    - Wipe keys from stack and heap
+    - Many other small changes
+    - Make --daemon not racy
+  - swtpm_setup:
+    - Only activate SHA256 PCR bank, not SHA1 bank anymore by default
+    - Support for linear file storage backend (file://)
+    - Implement option --create-config-files to create config files
+    - Use non-deprecated APIs to contruct RSA key (OSSL 3)
+    - Report stderr as returned by external tool (swtpm-localcal)
+    - Replace '+' and ',' characters in VMId's to make work with
+      common name in X509 subject
+    - Add support for --reconfigure flag to change active PCR banks
+  - swtpm_localca:
+    - Created certificates for CAs and TPM that do not expire
+  - swtpm_cert:
+    - Allow passing -1 for days to get a non-expiring certificate
+  - test:
+    - ASAN-related test changes and skipping of tests if ASAN is used
+    - Fix tests using tpm2-abrmd by preventing concurrency
+    - Skip chardev related tests after checking for chardev support
+    - exit with error code if mktemp fails
+    - OSSL 3: Make TPM 1.2 test compile; skip IBM TSS 2 test
+  - build-sys:
+    - Introduce --enable-sanitizers to configure
+    - Remove check for pip3 that was used by python swtpm_setup
+    - Allow passing of aditional CFLAGS during build
+
+version 0.6.0:
+  - swtpm:
+    - Fix --print-capabilities for 'swtpm chardev'
+    - Various cleanups and fixes (coverity)
+    - Addressed potential symlink attack issue (CVE-2020-28407)
+  - swtpm_setup:
+    - Rewritten in 'C'; needs json-glib
+    - Addressed potential symlink attack issue (CVE-2020-28407)
+  - swtpm_ioctl:
+    - Use timeouts for communicating with swtpm (Unix socket)
+  - swtpm-localca:
+    - Rewritten in 'C'
+  - tests:
+    - Use the IBM TSS2 v1.6.0's test suite
+    - Store and also restore the volatile state at every step when running
+      IBM TSS2 test suite
+    - Various cleanup
+  - build-sys:
+    - Add HARDENING_CFLAGS and _LDFLAGS to all C programs
+
+version 0.5.0:
+  - swtpm:
+    - Write files atomically using a temp file and then renaming
+  - swtpm_setup:
+    - Removed remaining 'c' wrapper program
+    - Do not truncate logfile when testing write-access (regression)
+    - Remove TPM state file in case error occurred
+  - swtpm-localca:
+    - Rewrite in python
+    - Allow passing pkcs11 PIN using signingkey_password
+    - Allow passing environment variables needed for pkcs11 modules using
+      swtpm-localca.conf and format 'env:VARNAME=VALUE'.
+  - build-sys:
+    - Add python-install and python-uninstall targets
+    - Add configure option to disable installation of Python module
+    - Use -Wl,-z,relro and -Wl,-z,now only when linking (clang)
+    - Use AC_LINK_IFELSE to check whether support for hardening flags
+
+version 0.4.0:
+  - swtpm:
+    - Invoke print capabilities after choosing TPM version
+    - Add some recent syscalls to seccomp blacklist
+  - swtpm_cert:
+    - Support --ecc-curveid option to pass curve id
+  - swtpm_setup & related scripts:
+    - Rewrite swtpm_setup.sh in python with TPM 1.2 not requiring tcsd
+      and TPM tools anymore; new dependencies:
+      - python3: pip, cryptography, setuptools
+      dropped dependencies for swtpm_setup:
+      - tcsd, expect, tpm-tools (some still needed for pkcs11 tests)
+    - Added support for RSA 3072 keys (for libtpms-0.8.0) and moved to
+      ECC NIST P384 curve; default RSA key size is still 2048
+    - Added support for --rsa-keysize option
+    - Extend script to create a CA using a TPM 2 for signing
+  - tests:
+    - Use the IBM TSS2 v1.5.0's test suite
+    - Add test case for loading of an NVRAM completely full with keys
+    - Have softhsm_setup use temporary directory for softhsm config & state
+    - various other improvements
+  - man pages:
+    - Improvements
+  - build-sys:
+    - clang: properly test for linker flag 'now' and 'relro'
+    - Gentoo: explicitly link libswtpm_libtpms with -lcrypto
+    - Ownership of /var/lib/swtpm-localca is now tss:root and
+      mode flags 0750.
+
+version 0.3.0:
+  - swtpm:
+      - Support for applying 'TPM Startup' command during initialization
+      - Use writev_full rather than writev; fixes --vtpm-proxy EIO error
+      - Only accept() new client ctrl connection if we have none (bugfix)
+  - swtpm_setup & related scripts:
+      - Support whitespaces in filenames and paths
+      - Do not fail on future PCR banks' hashes
+  - swtpm_cert:
+      - Fix OIDs for TPM 2 platforms data
+      - Option parsing cleanup
+      - Support for passing password in various forms
+      - Use gnutls_x509_crt_get_subject_key_id API call for subj keyId
+      - Support 64bit serial numbers read from command line
+  - swtpm_ioctl:
+      - Block SIGPIPE so we can get EPIPE on write()
+  - swtpm_bios:
+      - Block SIGPIPE so we can get EPIPE on write()
+  - tests:
+      - Increased timeouts and better support for running tests with
+        executables run by valgrind
+      - Allow running tests with choice of seccomp profile option
+        (SWTPM_TEST_SECCOMP_OPT) to enable building for Ubuntu
+      - Various cleanups & fixes
+  - SELinux:
+      - More rules added for support on F30
+
+version 0.2.0:
+  - Linux: swtpm now runs with a seccomp profile (blacklist) if compiled with
+           libseccomp support
+  - Added subpport for passing key and passphrase via file descriptor
+  - TPM 2 commands can now be prefixed by 'the TCG header' and responses will
+    have a 4-byte prefix and 4-byte suffix.
+  - Added --print-capabilities command line option
+  - Proper handling on EINTR on read, poll, and write
+
+version 0.1.0:
+  first public release

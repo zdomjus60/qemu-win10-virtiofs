@@ -1,0 +1,260 @@
+#!/usr/bin/env bash
+
+# For the license, see the LICENSE file in the root directory.
+
+TOPBUILD=${abs_top_builddir:-$(dirname "$0")/..}
+ROOT=${abs_top_builddir:-$(dirname "$0")/..}
+TESTDIR=${abs_top_testdir:-$(dirname "$0")}
+
+source "${TESTDIR}/common"
+skip_test_no_tpm20 "${SWTPM_EXE}"
+
+workdir="$(mktemp -d "/tmp/path with spaces.XXXXXX")" || exit 1
+
+SIGNINGKEY=${workdir}/signingkey.pem
+ISSUERCERT=${workdir}/issuercert.pem
+CERTSERIAL=${workdir}/certserial
+USER_CERTSDIR=${workdir}/mycerts
+mkdir -p "${USER_CERTSDIR}"
+
+PATH=${TOPBUILD}/src/swtpm_bios:$PATH
+
+trap "cleanup" SIGTERM EXIT
+
+function cleanup()
+{
+	rm -rf "${workdir}"
+}
+
+# We want swtpm_cert to use the local CA and see that the
+# local CA script automatically creates a signingkey and
+# self-signed certificate
+
+cat <<_EOF_ > "${workdir}/swtpm-localca.conf"
+statedir=${workdir}
+signingkey = ${SIGNINGKEY}
+issuercert = ${ISSUERCERT}
+certserial = ${CERTSERIAL}
+_EOF_
+
+#max. serial number must immediately be replace with 20 digits one
+echo -n 1461501637330902918203684832716283019655932542975 > "${CERTSERIAL}"
+
+cat <<_EOF_ > "${workdir}/swtpm-localca.options"
+--tpm-manufacturer IBM
+--tpm-model swtpm-libtpms
+--tpm-version 2
+--platform-manufacturer "Fedora XYZ"
+--platform-version 2.1
+--platform-model "QEMU A.B"
+_EOF_
+
+export MY_SWTPM_LOCALCA="${SWTPM_LOCALCA}"
+
+profile="default-v1"
+if ${SWTPM_SETUP} \
+	--tpm2 \
+	--tpm "${SWTPM_EXE} socket ${SWTPM_TEST_SECCOMP_OPT}" \
+	--print-capabilities \
+	| grep '"default-v2"'; then
+	profile="default-v2"
+fi
+
+cat <<_EOF_ > "${workdir}/swtpm_setup.conf"
+create_certs_tool=\${MY_SWTPM_LOCALCA}
+create_certs_tool_config=${workdir}/swtpm-localca.conf
+create_certs_tool_options=${workdir}/swtpm-localca.options
+profile = {"Name": "${profile}"}
+_EOF_
+
+# We need to adapt the PATH so the correct swtpm_cert is picked
+export PATH=${TOPBUILD}/src/swtpm_cert:${PATH}
+
+keysizes="2048"
+
+for keysize in 3072 4096; do
+	if ${SWTPM_SETUP} \
+		--tpm2 \
+		--tpm "${SWTPM_EXE} socket ${SWTPM_TEST_SECCOMP_OPT}" \
+		--print-capabilities |
+	     grep -q "tpm2-rsa-keysize-${keysize}"; then
+		keysizes+=" ${keysize}"
+	fi
+done
+
+for keysize in ${keysizes}; do
+	echo "Testing with RSA keysize $keysize"
+	# we need to create at least one cert: --create-ek-cert
+	if ! ${SWTPM_SETUP} \
+		--tpm2 \
+		--allow-signing \
+		--tpm-state "${workdir}" \
+		--create-ek-cert \
+		--create-platform-cert \
+		--config "${workdir}/swtpm_setup.conf" \
+		--logfile "${workdir}/logfile" \
+		--tpm "${SWTPM_EXE} socket ${SWTPM_TEST_SECCOMP_OPT}" \
+		--rsa-keysize "${keysize}" \
+		--overwrite \
+		--write-ek-cert-files "${USER_CERTSDIR}";
+	then
+		echo "Error: Could not run $SWTPM_SETUP."
+		echo "Logfile output:"
+		cat "${workdir}/logfile"
+		exit 1
+	fi
+
+	if [ ! -r "${SIGNINGKEY}" ]; then
+		echo "Error: Signingkey file ${SIGNINGKEY} was not created."
+		exit 1
+	fi
+
+	if [ ! -r "${ISSUERCERT}" ]; then
+		echo "Error: Issuer cert file ${ISSUERCERT} was not created."
+		exit 1
+	fi
+
+	if [ ! -r "${CERTSERIAL}" ]; then
+		echo "Error: Cert serial number file ${CERTSERIAL} was not created."
+		exit 1
+	fi
+
+	tmp=$(cat "${CERTSERIAL}")
+	if [ "${#tmp}" -ne 20 ]; then
+		echo "Error: Cert serial number in file should now be 20 digits long."
+		exit 1
+	fi
+
+	certfile="${USER_CERTSDIR}/ek-rsa${keysize}.crt"
+	if [ ! -f "${certfile}" ]; then
+		echo "Error: EK file '${certfile}' was not written."
+		ls -l "${USER_CERTSDIR}"
+		exit 1
+	fi
+
+	if ! $CERTTOOL --inder --infile "${certfile}" -i | grep -q "${keysize} bits"; then
+		echo "Error: EK file '${certfile}' is not an RSA ${keysize} bit key."
+		$CERTTOOL --inder --infile "${certfile}" -i
+		exit 1
+	fi
+	if ! $CERTTOOL --inder --infile "${certfile}" -i | grep "Key Usage" -A1 | \
+		grep -q "Digital signature."; then
+		echo "Error: EK file '${certfile}' does not have key usage flag 'Digitial signature' set."
+		$CERTTOOL --inder --infile "${certfile}" -i
+		exit 1
+	fi
+
+	rm -rf "${SIGNINGKEY}" "${ISSUERCERT}" "${CERTSERIAL}" "${USER_CERTSDIR}"/ek-*.crt
+done
+
+echo "Test 1: OK"
+
+function swtpm_setup_reconfigure() {
+	local workdir="$1"
+	local pwdfile="$2"
+
+	# Reconfigure the active PCR banks a few times; the size of the state
+	# file must not change but its content (hash) must change every time
+	# since activating the PCR banks changes a few bits in the permanent
+	# state, also when the state is not encrypted.
+	local PERMALL_FILE="${workdir}/tpm2-00.permall"
+	local permall_hash permall_size newhash newsize
+
+	permall_size=$(get_filesize "${PERMALL_FILE}")
+
+	for pcrbanks in "sha256" "sha256,sha384" "sha256,sha384,sha512"; do
+		# hash must change between before and after
+		permall_hash=$(get_sha1_file "${PERMALL_FILE}")
+
+		if ! ${SWTPM_SETUP} \
+			--tpm2 \
+			--tpm-state "${workdir}" \
+			--config "${workdir}/swtpm_setup.conf" \
+			--logfile "${workdir}/logfile" \
+			--tpm "${SWTPM_EXE} socket ${SWTPM_TEST_SECCOMP_OPT}" \
+			--pcr-banks "${pcrbanks}" \
+			--reconfigure \
+			${pwdfile:+--pwdfile "${pwdfile}"};
+		then
+			echo "Error: Could not run $SWTPM_SETUP --reconfigure."
+			echo "Logfile output:"
+			cat "${workdir}/logfile"
+			exit 1
+		fi
+
+		newhash=$(get_sha1_file "${PERMALL_FILE}")
+		if [ "${newhash}" = "${permall_hash}" ]; then
+			echo "Error: The hash of the permanent state did not change."
+			exit 1
+		fi
+
+		newsize=$(get_filesize "${PERMALL_FILE}")
+		if [ "${newsize}" != "${permall_size}" ]; then
+			echo "Error: The size of the permanent state file changed."
+			echo "Actual  : ${newsize}"
+			echo "Expected: ${permall_size}"
+			exit 1
+		fi
+		echo "Filesize: ${newsize}; hash: ${newhash}; pwdfile: ${pwdfile}"
+	done
+}
+
+# Create with certificates with and without encryption enabled and reconfigure
+# the PCR banks
+PWDFILE="${workdir}/pwd"
+echo -n "password" > "${PWDFILE}"
+rm -f "${workdir}/logfile"
+
+for pwdfile in "" "${PWDFILE}"; do
+	if ! ${SWTPM_SETUP} \
+		--tpm2 \
+		--ecc \
+		--tpm-state "${workdir}" \
+		--create-ek-cert \
+		--create-platform-cert \
+		--config "${workdir}/swtpm_setup.conf" \
+		--logfile "${workdir}/logfile" \
+		--tpm "${SWTPM_EXE} socket ${SWTPM_TEST_SECCOMP_OPT}" \
+		--overwrite \
+		--write-ek-cert-files "${workdir}" \
+		${pwdfile:+--pwdfile "${pwdfile}"}; then
+		echo "Error: Could not run $SWTPM_SETUP."
+		echo "Logfile output:"
+		cat "${workdir}/logfile"
+		exit 1
+	fi
+
+	if [ ! -r "${SIGNINGKEY}" ]; then
+		echo "Error: Signingkey file ${SIGNINGKEY} was not created."
+		exit 1
+	fi
+
+	if [ ! -r "${ISSUERCERT}" ]; then
+		echo "Error: Issuer cert file ${ISSUERCERT} was not created."
+		exit 1
+	fi
+
+	if [ ! -r "${CERTSERIAL}" ]; then
+		echo "Error: Cert serial number file ${CERTSERIAL} was not created."
+		exit 1
+	fi
+
+	certfile="${workdir}/ek-secp384r1.crt"
+	if [ ! -f "${certfile}" ]; then
+		echo "Error: EK file '${certfile}' was not written."
+		ls -l "${workdir}"
+		exit 1
+	fi
+
+	if ! $CERTTOOL --inder --infile "${certfile}" -i | grep -q "384 bits"; then
+		echo "Error: EK file '${certfile}' is not an ECC 384 bit key."
+		$CERTTOOL --inder --infile "${certfile}" -i
+		exit 1
+	fi
+
+	swtpm_setup_reconfigure "${workdir}" "${pwdfile}"
+done
+
+echo "Test 2: OK"
+
+exit 0

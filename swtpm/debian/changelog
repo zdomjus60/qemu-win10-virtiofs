@@ -1,0 +1,119 @@
+swtpm (0.10.0) RELEASED; urgency=medium
+
+  * Stable release
+
+ -- Stefan Berger <stefanb@linux.ibm.com>  Fri, 15 Nov 2024 09:00:00 -0500
+
+swtpm (0.10.0~dev1) UNRELEASED; urgency=medium
+
+  * Developer release 1
+
+ -- Stefan Berger <stefanb@linux.ibm.com>  Thu, 26 Jun 2024 09:00:00 -0500
+
+swtpm (0.9.0) RELEASED; urgency=medium
+
+  * Stable release
+
+ -- Stefan Berger <stefanb@linux.ibm.com>  Mon, 17 Jun 2024 09:00:00 -0500
+
+swtpm (0.9.0~dev1) UNRELEASED; urgency=medium
+
+  * Developer release 1
+
+ -- Stefan Berger <stefanb@linux.ibm.com>  Fri, 11 Nov 2022 11:14:00 -0500
+
+swtpm (0.8.0) RELEASED; urgency=medium
+
+  * Stable release
+
+ -- Stefan Berger <stefanb@linux.ibm.com>  Tue, 10 Nov 2022 09:00:00 -0500
+
+swtpm (0.8.0~dev1) UNRELEASED; urgency=medium
+
+  * Developer release 1
+
+ -- Stefan Berger <stefanb@linux.ibm.com>  Fri, 19 Nov 2021 11:14:00 -0500
+
+swtpm (0.7.0) RELEASED; urgency=medium
+
+  * Stable release
+
+ -- Stefan Berger <stefanb@linux.ibm.com>  Tue, 09 Nov 2021 09:00:00 -0500
+
+swtpm (0.7.0~dev1) UNRELEASED; urgency=medium
+
+  * Developer release 1
+
+ -- Stefan Berger <stefanb@linux.ibm.com>  Fri, 11 Jun 2021 09:14:00 -0500
+
+swtpm (0.6.0) RELEASED; urgency=medium
+
+  * Stable release
+
+ -- Stefan Berger <stefanb@linux.ibm.com>  Mon, 07 Jun 2021 09:00:00 -0500
+
+swtpm (0.6.0~dev1) UNRELEASED; urgency=medium
+
+  * Developer release 1
+
+ -- Stefan Berger <stefanb@linux.ibm.com>  Fri, 09 Oct 2020 14:14:00 -0500
+
+swtpm (0.5.0) RELEASED; urgency=medium
+
+  * Stable release
+
+ -- Stefan Berger <stefanb@linux.ibm.com>  Wed, 07 Oct 2020 11:27:00 -0500
+
+swtpm (0.5.0~dev1) UNRELEASED; urgency=medium
+
+  * Developer release 1
+
+ -- Stefan Berger <stefanb@linux.ibm.com>  Tue, 08 Sep 2020 09:00:00 -0500
+
+swtpm (0.4.0-1) RELEASED; urgency=medium
+
+  * Stable release
+
+ -- Stefan Berger <stefanb@linux.ibm.com>  Fri, 28 Aug 2020 16:50:00 -0500
+
+swtpm (0.4.0~dev1) UNRELEASED; urgency=medium
+
+  * Developer release 1
+
+ -- Stefan Berger <stefanb@linux.ibm.com>  Tue, 07 Apr 2020 10:35:00 -0500
+
+swtpm (0.3.0-1) RELEASED; urgency=medium
+
+  * Release of swtpm-0.3.0
+
+ -- Stefan Berger <stefanb@linux.ibm.com>  Mon, 17 Feb 2020 09:00:00 -0500
+
+swtpm (0.2.0-1) RELEASED; urgency=medium
+
+  * Stable release
+
+ -- Stefan Berger <stefanb@linux.ibm.com>  Tue, 16 Jul 2019 14:21:18 -0500
+
+swtpm (0.2.0~dev1) UNRELEASED; urgency=medium
+
+  * Developer release 1
+
+ -- Stefan Berger <stefanb@linux.ibm.com>  Mon, 04 Feb 2019 14:30:08 -0500
+
+swtpm (0.1.0-1) RELEASED; urgency=medium
+
+  * Initial public release
+
+ -- Stefan Berger <stefanb@linux.vnet.ibm.com>  Mon, 28 Jan 2019 15:58:22 -0500
+
+swtpm (0.1.0-1~dev2) RELEASED; urgency=medium
+
+  * Developer release 2
+
+ -- Stefan Berger <stefanb@linux.vnet.ibm.com>  Mon, 13 Nov 2017 15:20:00 -0500
+
+swtpm (0.1.0) UNRELEASED; urgency=medium
+
+  * Under development
+
+ -- Stefan Berger <stefanb@linux.vnet.ibm.com>  Tue, 12 Jan 2016 14:19:43 -0500
