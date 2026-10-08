@@ -18,7 +18,7 @@ info() { echo "  -> $*"; }
 HOST_IF=$(ip -4 route show default | awk '{for(i=1;i<=NF;i++) if($i=="dev"){print $(i+1); exit}}')
 
 # --- fermo il nostro dnsmasq (DHCP) ---
-echo "Fermo dnsmasq (DHCP della VM)..."
+echo "Stopping dnsmasq (VM DHCP)..."
 if [ -f "$DNSMASQ_PID" ]; then
 	sudo kill "$(cat "$DNSMASQ_PID")" 2>/dev/null || true
 	sudo rm -f "$DNSMASQ_PID" 2>/dev/null || true
@@ -26,7 +26,7 @@ fi
 sudo systemctl stop dnsmasq 2>/dev/null || true
 
 # --- rimuovo le regole iptables che ho creato ---
-echo "Rimuovo le regole iptables..."
+echo "Removing iptables rules..."
 IFACES="$HOST_IF"
 [ -n "$HOST_IF" ] && [ "$HOST_IF" != "$LEGACY_HOST_IF" ] && IFACES="$HOST_IF $LEGACY_HOST_IF"
 for IF in $IFACES; do
@@ -37,7 +37,7 @@ done
 sudo iptables -D FORWARD -m physdev --physdev-is-bridged -j ACCEPT 2>/dev/null || true
 
 # --- abbasso bridge e tap ---
-echo "Rimuovo $TAP_IF e $BRIDGE_IF..."
+echo "Removing $TAP_IF and $BRIDGE_IF..."
 sudo ip link set "$TAP_IF" down 2>/dev/null || true
 sudo ip link set "$BRIDGE_IF" down 2>/dev/null || true
 sudo ip link del "$TAP_IF" 2>/dev/null || true
@@ -45,4 +45,4 @@ sudo ip link del "$BRIDGE_IF" 2>/dev/null || true
 
 # nota: net.ipv4.ip_forward resta com'e' (lo usa anche Docker, se presente)
 
-info "configurazione di rete rimossa"
+info "network configuration removed"

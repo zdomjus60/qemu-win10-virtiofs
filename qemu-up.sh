@@ -19,16 +19,16 @@ VM_DNS="8.8.8.8,8.8.4.4"
 DNSMASQ_PID="/run/qemu-dnsmasq.pid"
 LEGACY_HOST_IF="enp3s0" # vecchio valore usato in passato, lo rimuoviamo
 
-err()  { echo "ERRORE: $*" >&2; exit 1; }
+err()  { echo "ERROR: $*" >&2; exit 1; }
 info() { echo "  -> $*"; }
 
 # --- interfaccia di uplink: la ricavo dalla route default ---
 HOST_IF=$(ip -4 route show default | awk '{for(i=1;i<=NF;i++) if($i=="dev"){print $(i+1); exit}}')
-[ -n "$HOST_IF" ] || err "nessuna route default trovata: controlla la connessione internet"
-echo "Interfaccia uplink: $HOST_IF"
+[ -n "$HOST_IF" ] || err "no default route found: check the internet connection"
+echo "Uplink interface: $HOST_IF"
 
 # --- pulizia delle configurazioni precedenti (idempotente) ---
-echo "Pulizia delle configurazioni precedenti..."
+echo "Cleaning up previous configuration..."
 if [ -f "$DNSMASQ_PID" ]; then
 	sudo kill "$(cat "$DNSMASQ_PID")" 2>/dev/null || true
 	rm -f "$DNSMASQ_PID" 2>/dev/null || sudo rm -f "$DNSMASQ_PID"
@@ -49,30 +49,30 @@ sudo ip link del "$TAP_IF" 2>/dev/null || true
 sudo ip link del "$BRIDGE_IF" 2>/dev/null || true
 
 # --- instradamento (NAT) della VM verso l'esterno ---
-echo "Abilito il forwarding delle route (net.ipv4.ip_forward=1)..."
+echo "Enabling packet forwarding (net.ipv4.ip_forward=1)..."
 sudo sysctl -w net.ipv4.ip_forward=1 >/dev/null
 
 # --- bridge ---
-echo "Creo il bridge $BRIDGE_IF con indirizzo $VM_GATEWAY/24..."
+echo "Creating bridge $BRIDGE_IF with address $VM_GATEWAY/24..."
 sudo ip link add name "$BRIDGE_IF" type bridge
 sudo ip addr add "$VM_GATEWAY/24" dev "$BRIDGE_IF"
 sudo ip link set "$BRIDGE_IF" up
 
 # --- interfaccia tap per QEMU ---
 OWNER="${SUDO_USER:-$(id -un)}"
-echo "Creo l'interfaccia $TAP_IF (proprietario: $OWNER)..."
+echo "Creating interface $TAP_IF (owner: $OWNER)..."
 sudo ip tuntap add dev "$TAP_IF" mode tap user "$OWNER"
 sudo ip link set "$TAP_IF" up
 sudo ip link set "$TAP_IF" master "$BRIDGE_IF"
 
 # --- regole NAT/FORWARD ---
-echo "Configuro iptables (NAT su $HOST_IF)..."
+echo "Configuring iptables (NAT on $HOST_IF)..."
 sudo iptables -t nat -A POSTROUTING -o "$HOST_IF" -j MASQUERADE
 sudo iptables -A FORWARD -i "$BRIDGE_IF" -o "$HOST_IF" -j ACCEPT
 sudo iptables -A FORWARD -i "$HOST_IF" -o "$BRIDGE_IF" -m state --state RELATED,ESTABLISHED -j ACCEPT
 
 # --- DHCP dedicato per la VM ---
-echo "Avvio dnsmasq (solo DHCP, DNS esterno 8.8.8.8)..."
+echo "Starting dnsmasq (DHCP only, external DNS 8.8.8.8)..."
 sudo dnsmasq \
 	--conf-file= \
 	--port=0 \
@@ -85,12 +85,12 @@ sudo dnsmasq \
 	--pid-file="$DNSMASQ_PID"
 
 sleep 0.5
-[ -f "$DNSMASQ_PID" ] || err "dnsmasq non e' partito"
+[ -f "$DNSMASQ_PID" ] || err "dnsmasq did not start"
 
 echo
 info "bridge   : $BRIDGE_IF ($VM_GATEWAY/24) UP"
-info "tap      : $TAP_IF  ->  $BRIDGE_IF (proprietario $OWNER)"
-info "NAT      : via $HOST_IF (ip_forward attivo)"
+info "tap      : $TAP_IF  ->  $BRIDGE_IF (owner $OWNER)"
+info "NAT      : via $HOST_IF (ip_forward active)"
 info "DHCP     : $VM_DHCP_RANGE, gateway $VM_GATEWAY"
 echo
-echo "Ora puoi avviare la VM:  ./launch.sh"
+echo "Now you can start the VM:  ./launch.sh"
