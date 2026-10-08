@@ -95,7 +95,7 @@ Pacchetti **opzionali** ma utili:
 ```bash
 sudo apt install -y curl 7zip      # se tools/ incompleto: estrae driver dalla ISO e scarica WinFsp
 sudo apt install -y socat        # per parlare con il monitor di QEMU
-sudo apt install -y cpu-checker  # fornisce il comando "kvm-ok"
+sudo apt install -y cpu-checker  # fornisce kvm-ok, in /usr/sbin (vedi §1.4)
 sudo apt install -y libguestfs-tools  # per ispezionare il disco senza avviare la VM
 ```
 
@@ -109,9 +109,16 @@ sudo apt install -y pipewire-audio pipewire-pulse wireplumber
 
 ```bash
 qemu-system-x86_64 --version      # es. 10.0.x
-kvm-ok                            # se hai installato cpu-checker
+sudo /usr/sbin/kvm-ok            # facoltativo: autotest KVM (di cpu-checker)
 ./launch.sh --dry-run             # stampa il comando qemu che verrebbe eseguito
 ```
+
+> **Nota su `kvm-ok`:** viene installato in `/usr/sbin`, directory che spesso
+> **non è nella `PATH`** di un utente normale: digitando `kvm-ok` potresti
+> ricevere *command not found* anche se il pacchetto è installato. Usa il path
+> completo come sopra (oppure `export PATH="$PATH:/usr/sbin"`). È solo un
+> comodo controllo: quello che conta davvero è `/dev/kvm` (§1.2), che
+> `launch.sh` verifica da solo all'avvio.
 
 ### 1.5 Le ISO (da scaricare: non fanno parte del repository)
 
@@ -455,6 +462,8 @@ Tutto in un colpo: `./launch.sh --share` stampa questi stessi passaggi.
 | Sintomo | Causa | Rimedio |
 |---|---|---|
 | `ERROR: /dev/kvm not accessible` | utente fuori dal gruppo | `sudo usermod -aG kvm $USER` + re-login |
+| `kvm-ok: command not found` | `kvm-ok` sta in `/usr/sbin`, che non è in `PATH` | esegui `sudo /usr/sbin/kvm-ok` (oppure `export PATH="$PATH:/usr/sbin"`) |
+| `kvm-ok` dice *CPU does not support KVM extensions* oppure */dev/kvm does not exist* | VT-x disattivo nel BIOS, o modulo non caricato | attiva **Intel Virtualization Technology** nel BIOS + **spegni e accendi**, poi `sudo modprobe kvm_intel` |
 | `ERROR: the network is still not ready` | rete non configurata | `./qemu-up.sh` (oppure `--net user`) |
 | VM senza internet | NAT/interfaccia sbagliata | ri-esegui `./qemu-up.sh` (l'uplink viene rilevato automaticamente), poi `ip route` per verificare |
 | `ERROR: ... is already in use by another QEMU instance` | VM ancora aperta | chiudi la finestra VM; se non c'è: `pgrep -a qemu-system-x86_64` |
