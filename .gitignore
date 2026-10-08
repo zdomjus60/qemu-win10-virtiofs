@@ -1,0 +1,57 @@
+# ============================================================
+# Immagini e binari grandi (dati personali / software con licenza)
+# ============================================================
+*.qcow2
+*.iso
+*.img
+*.raw
+*.exe
+*.msi
+
+# ============================================================
+# Firmware UEFI: qui ci sono NVRAM con il seriale della VM e
+# chiavi. Il firmware "pulito" viene dal pacchetto Debian `ovmf`.
+# ============================================================
+OVMF/
+ovmf/
+*.fd
+
+# ============================================================
+# Seriale/licenza Windows
+# ============================================================
+seriale.txt
+
+# ============================================================
+# Stato TPM (macchina-specifico) e sorgenti swtpm di terze parti
+# ============================================================
+swtpm/
+
+# ============================================================
+# Artefatti generati da launch.sh (ricreati da soli all'avvio)
+# ============================================================
+.tools-fs.tmp
+tools/viofs/
+tools/winfsp*
+virtiofsd.log
+*.log
+
+# ============================================================
+# Socket, pid e altro stato runtime
+# ============================================================
+*.sock
+*.pid
+*.lock
+
+# ============================================================
+# Contenuti della cartella condivisa (dati personali):
+# la cartella esiste nel repo, i file dentro no.
+# ============================================================
+condivisa/*
+!condivisa/.gitkeep
+
+# ============================================================
+# Editor e backup
+# ============================================================
+*~
+*.bak
+*.swp
